@@ -398,7 +398,7 @@ The `demo-` prefix makes the emulator run fully offline.
     "functions": { "port": 5001 },
     "firestore": { "port": 8080 },
     "storage": { "port": 9199 },
-    "hosting": { "port": 5000 },
+    "hosting": { "port": 5010 },
     "ui": { "enabled": true, "port": 4000 },
     "singleProjectMode": true
   }
@@ -433,7 +433,7 @@ service firebase.storage {
 {
   "name": "functions",
   "engines": { "node": "20" },
-  "main": "lib/index.js",
+  "main": "lib/functions/src/index.js",
   "scripts": {
     "build": "tsc",
     "serve": "npm run build && firebase emulators:start --only functions",
@@ -456,13 +456,19 @@ service firebase.storage {
 {
   "compilerOptions": {
     "module": "commonjs", "target": "es2021", "outDir": "lib",
-    "rootDir": ".", "strict": true, "esModuleInterop": true,
+    "rootDir": "..", "strict": true, "esModuleInterop": true,
     "skipLibCheck": true, "resolveJsonModule": true
   },
-  "include": ["src", "../src/domain"]
+  "include": ["src/**/*", "../src/domain/**/*", "../src/config/**/*"]
 }
 ```
-This lets Functions import the shared `../src/domain/*` modules directly.
+This lets Functions import the shared `../src/domain/*` and `../src/config/*` modules
+directly. **`rootDir: ".."` is required** (not `"."`): the shared modules live above
+`functions/`, so the compile root must be the repo root or `tsc` fails with `TS6059`.
+Emitted output mirrors the repo tree under `lib/` — Functions land at
+`lib/functions/src/index.js` (hence `main` above) and shared code at `lib/src/domain/*.js`,
+`lib/src/config/*.js`. Relative imports (e.g. `functions/src/foo.ts` → `../../src/domain/x`)
+resolve identically before and after compile because the tree is preserved.
 
 Run `cd functions && npm install`.
 

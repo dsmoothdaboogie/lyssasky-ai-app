@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "module": "commonjs", "target": "es2021", "outDir": "lib",
-    "rootDir": ".", "strict": true, "esModuleInterop": true,
+    "rootDir": "..", "strict": true, "esModuleInterop": true,
     "skipLibCheck": true, "resolveJsonModule": true
   },
-  "include": ["src", "../src/domain"]
+  "include": ["src/**/*", "../src/domain/**/*", "../src/config/**/*"]
 }
