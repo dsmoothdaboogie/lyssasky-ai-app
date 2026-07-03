@@ -1,6 +1,6 @@
 import { Route, Routes } from 'react-router-dom';
 import { FunnelProvider } from './funnel/useFunnelState';
-import { Placeholder } from './funnel/Placeholder';
+import { AdminApp } from './admin/AdminApp';
 import { LandingPage } from './funnel/LandingPage';
 import { UploadStep } from './funnel/UploadStep';
 import { QuestionnaireStep } from './funnel/QuestionnaireStep';
@@ -22,7 +22,7 @@ export default function App() {
         <Route path="/wait" element={<WaitScreen />} />
         <Route path="/result" element={<ResultStep />} />
         <Route path="/book" element={<BookingStep />} />
-        <Route path="/admin/*" element={<Placeholder name="Admin" />} />
+        <Route path="/admin/*" element={<AdminApp />} />
       </Routes>
     </FunnelProvider>
   );

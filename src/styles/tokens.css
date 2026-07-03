@@ -41,6 +41,7 @@
 
   /* Layout */
   --funnel-max-width: 460px;
+  --admin-max-width: 960px;
 
   /* Elevation */
   --shadow-soft: 0 8px 24px -12px rgba(46, 42, 38, 0.18), 0 2px 8px -4px rgba(46, 42, 38, 0.1);
