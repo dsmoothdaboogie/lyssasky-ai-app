@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AdminApp } from './AdminApp';
 import { useAdminAuth } from './useAdminAuth';
 import type { UseAdminAuth } from './useAdminAuth';
@@ -25,10 +25,17 @@ function mockAuth(overrides: Partial<UseAdminAuth>) {
   });
 }
 
-function renderAdminApp() {
+function renderAdminApp(initialEntry = '/admin') {
+  // Mirrors production (App.tsx mounts AdminApp at path="/admin/*"): the
+  // nested <Routes> inside AdminApp match against the pathname with that
+  // prefix stripped, so it must be nested the same way here for the
+  // routing (in particular the "/admin" -> "/admin/leads" redirect) to be
+  // exercised faithfully.
   return render(
-    <MemoryRouter initialEntries={['/admin']}>
-      <AdminApp />
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <Routes>
+        <Route path="/admin/*" element={<AdminApp />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
