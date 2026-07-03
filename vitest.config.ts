@@ -8,5 +8,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/setupTests.ts'],
     css: false,
+    // The functions/ workspace has its own Vitest (node env + emulator).
+    // Keep those out of the root (jsdom) run.
+    exclude: ['**/node_modules/**', '**/dist/**', 'functions/**'],
   },
 });
