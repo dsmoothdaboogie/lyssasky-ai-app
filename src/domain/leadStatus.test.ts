@@ -8,6 +8,9 @@ describe('lead status machine', () => {
     expect(canTransition('generated', 'rated')).toBe(true);
     expect(canTransition('rated', 'booked')).toBe(true);
   });
+  it('allows booking directly from generated (customer skips rating)', () => {
+    expect(canTransition('generated', 'booked')).toBe(true);
+  });
   it('allows re-generation and failure/retry paths', () => {
     expect(canTransition('generated', 'generated')).toBe(true); // free re-generate
     expect(canTransition('paid', 'failed')).toBe(true);

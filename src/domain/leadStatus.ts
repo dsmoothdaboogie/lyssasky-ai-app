@@ -3,7 +3,7 @@ import type { LeadStatus } from './types';
 export const LEAD_TRANSITIONS: Record<LeadStatus, LeadStatus[]> = {
   captured: ['paid'],
   paid: ['generated', 'failed'],
-  generated: ['generated', 'rated', 'failed'],
+  generated: ['generated', 'rated', 'booked', 'failed'],
   rated: ['booked', 'generated'],
   booked: [],
   failed: ['paid', 'generated'],
