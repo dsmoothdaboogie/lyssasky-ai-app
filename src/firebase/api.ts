@@ -117,13 +117,18 @@ export async function apiLogEvent(
   type: AnalyticsEventType,
   leadId?: string,
   meta?: Record<string, string | number | boolean>
-): Promise<Ok> {
-  const fn = httpsCallable<
-    { type: AnalyticsEventType; leadId?: string; meta?: Record<string, string | number | boolean> },
-    Ok
-  >(functions, 'logEvent');
-  const res = await fn({ type, leadId, meta });
-  return res.data;
+): Promise<void> {
+  // Analytics is best-effort: a logging failure must never reject into the
+  // caller (many call sites are fire-and-forget) or break the funnel.
+  try {
+    const fn = httpsCallable<
+      { type: AnalyticsEventType; leadId?: string; meta?: Record<string, string | number | boolean> },
+      Ok
+    >(functions, 'logEvent');
+    await fn({ type, leadId, meta });
+  } catch {
+    // swallow — event logging is non-critical
+  }
 }
 
 export function watchLead(leadId: string, cb: (lead: Lead | undefined) => void): () => void {
