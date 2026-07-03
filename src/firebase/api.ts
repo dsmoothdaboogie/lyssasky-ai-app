@@ -142,6 +142,17 @@ export async function fetchLead(leadId: string): Promise<Lead | undefined> {
 }
 
 /**
+ * Admin-only: fetches every lead, newest first. Per firestore.rules the
+ * `admin` custom claim allows reading all `leads` docs (a non-admin's
+ * request would be denied).
+ */
+export async function fetchAllLeads(): Promise<Lead[]> {
+  const q = query(collection(db, 'leads'), orderBy('createdAt', 'desc'));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => d.data() as Lead);
+}
+
+/**
  * Resolves a Storage path (e.g. a lead's original/generated photo) to a
  * viewable download URL. Works against both the emulator and production.
  */

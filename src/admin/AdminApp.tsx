@@ -1,11 +1,8 @@
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { LoginPage } from './LoginPage';
+import { LeadsListPage } from './LeadsListPage';
 import { useAdminAuth } from './useAdminAuth';
-
-function AdminHome() {
-  return <p>Leads coming soon.</p>;
-}
 
 /**
  * Guard + shell for the `/admin` area.
@@ -16,8 +13,8 @@ function AdminHome() {
  *    admin tools).
  *  - admin    -> the admin shell with its own routes below.
  *
- * Task 28 adds the leads list at /admin/leads; Task 29 adds the lead
- * detail card at /admin/leads/:id. Both slot into the <Routes> below.
+ * `/admin` redirects straight to the leads list. Task 29 adds the lead
+ * detail card at /admin/leads/:id.
  */
 export function AdminApp() {
   const { user, isAdmin, loading, signOut } = useAdminAuth();
@@ -57,8 +54,8 @@ export function AdminApp() {
       </header>
       <main className="admin-main">
         <Routes>
-          <Route path="/admin" element={<AdminHome />} />
-          {/* Task 28: <Route path="/admin/leads" .../> */}
+          <Route path="/admin" element={<Navigate to="/admin/leads" replace />} />
+          <Route path="/admin/leads" element={<LeadsListPage />} />
           {/* Task 29: <Route path="/admin/leads/:id" .../> */}
         </Routes>
       </main>

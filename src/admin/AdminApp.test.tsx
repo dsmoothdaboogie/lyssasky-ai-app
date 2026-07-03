@@ -8,6 +8,10 @@ vi.mock('./useAdminAuth', () => ({
   useAdminAuth: vi.fn(),
 }));
 
+vi.mock('../firebase/api', () => ({
+  fetchAllLeads: vi.fn().mockResolvedValue([]),
+}));
+
 const mockedUseAdminAuth = vi.mocked(useAdminAuth);
 
 function mockAuth(overrides: Partial<UseAdminAuth>) {
@@ -45,7 +49,7 @@ describe('AdminApp', () => {
 
     expect(screen.getByRole('heading', { name: /admin sign in/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
-    expect(screen.queryByText(/leads coming soon/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /^leads$/i })).not.toBeInTheDocument();
   });
 
   test('shows a no-access notice (not the tools) for a signed-in non-admin user', () => {
@@ -56,15 +60,15 @@ describe('AdminApp', () => {
     expect(screen.getByText(/don't have admin access/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /admin sign in/i })).not.toBeInTheDocument();
-    expect(screen.queryByText(/leads coming soon/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /^leads$/i })).not.toBeInTheDocument();
   });
 
-  test('renders the protected admin content for a signed-in admin', () => {
+  test('renders the protected admin content for a signed-in admin (redirected to the leads list)', async () => {
     mockAuth({ user: { uid: 'u1' } as never, isAdmin: true });
 
     renderAdminApp();
 
-    expect(screen.getByText(/leads coming soon/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /leads/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /admin sign in/i })).not.toBeInTheDocument();
   });
