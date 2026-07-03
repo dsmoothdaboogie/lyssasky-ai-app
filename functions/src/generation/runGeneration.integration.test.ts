@@ -66,4 +66,23 @@ describe('runGeneration', () => {
     expect(gens.docs[0].data().status).toBe('failed');
     expect(gens.docs[0].data().error).toMatch(/provider exploded/);
   });
+
+  it('marks the lead failed (without throwing) when the styleSlug has no matching style doc', async () => {
+    const ref = db.collection('leads').doc();
+    await ref.set({
+      id: ref.id, ownerUid: 'u3', leadToken: 't3', status: 'paid',
+      answers: { roomType: 'living_room', styleSlug: 'nonexistent-style', colorMood: 'warm_cozy', budget: '1k_5k', timeline: 'asap' },
+      originalPhotoPath: 'leads/u3/original.jpg',
+      generatedImagePaths: [], costEstimateTotal: 0, timestamps: {}, createdAt: 0, updatedAt: 0,
+    });
+    await seedOriginalPhoto('leads/u3/original.jpg');
+    await expect(runGeneration(ref.id, createMockGenerationProvider())).resolves.toBeUndefined();
+    const lead = (await ref.get()).data()!;
+    expect(lead.status).toBe('failed');
+    expect(lead.timestamps.failed).toBeGreaterThan(0);
+    const gens = await db.collection('generations').where('leadId', '==', ref.id).get();
+    expect(gens.size).toBe(1);
+    expect(gens.docs[0].data().status).toBe('failed');
+    expect(gens.docs[0].data().error).toMatch(/Unknown style/);
+  });
 });

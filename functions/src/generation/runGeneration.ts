@@ -8,7 +8,7 @@ import { logEventDoc } from '../events';
 import { createMockGenerationProvider } from './mockProvider';
 import { createGeminiGenerationProvider } from './geminiProvider';
 import type { GenerationProvider } from './provider';
-import type { Lead, Style, GenerationRecord } from '../../../src/domain/types';
+import type { Lead, Style, StyleRecipe, GenerationRecord } from '../../../src/domain/types';
 
 async function resolveProvider(): Promise<GenerationProvider> {
   const cfg = await loadConfig();
@@ -22,48 +22,83 @@ export async function runGeneration(leadId: string, provider?: GenerationProvide
   const gen = provider ?? (await resolveProvider());
   const ref = db.collection('leads').doc(leadId);
   const lead = (await ref.get()).data() as Lead | undefined;
-  if (!lead || !lead.answers || !lead.originalPhotoPath) return;
-  const style = (await db.collection('styles').doc(lead.answers.styleSlug).get()).data() as Style | undefined;
-  if (!style) throw new Error(`Unknown style ${lead.answers.styleSlug}`);
-  const prompt = buildGenerationPrompt({ name: style.name, recipe: style.recipe }, lead.answers);
-  await logEventDoc({ type: 'generation_started', leadId });
+  // Nothing to do if the lead doc itself doesn't exist.
+  if (!lead) return;
 
-  const bucket = storage.bucket();
-  const [photoBytes] = await bucket.file(lead.originalPhotoPath).download();
-  const start = Date.now();
-  let out; let lastErr: unknown;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try { out = await gen.generate({ photoBytes, mimeType: 'image/jpeg', prompt }); break; }
-    catch (e) { lastErr = e; }
-  }
-  const durationMs = Date.now() - start;
-  const genId = randomUUID();
+  // This is a hard requirement: runGeneration must NEVER throw. A thrown
+  // error here would escape the onLeadPaid trigger and strand an
+  // already-PAID lead at status:'paid' forever, with no failure record and
+  // no admin signal. Every step below — style lookup, prompt build, photo
+  // download, the provider call (with its retry), the Storage save, the
+  // generations write, and the lead status update — is covered by this one
+  // try/catch so any failure routes through the same failure path.
+  //
+  // We track whatever context we've learned so far so the failure record
+  // can be as informative as possible even if we fail early (e.g. before a
+  // style doc was ever loaded).
+  let styleSlug = lead.answers?.styleSlug ?? 'unknown';
+  let recipeSnapshot: StyleRecipe = { description: '', materials: '', palette: '', furniture: '', avoid: '' };
+  let promptSnapshot = '';
+  const inputPhotoPath = lead.originalPhotoPath ?? '';
 
-  if (!out) {
-    await ref.update({ status: 'failed', 'timestamps.failed': Date.now(), updatedAt: Date.now() });
+  try {
+    if (!lead.answers || !lead.originalPhotoPath) {
+      throw new Error(`Lead ${leadId} is missing answers or originalPhotoPath; cannot run generation`);
+    }
+    const style = (await db.collection('styles').doc(lead.answers.styleSlug).get()).data() as Style | undefined;
+    if (!style) throw new Error(`Unknown style ${lead.answers.styleSlug}`);
+    styleSlug = style.slug;
+    recipeSnapshot = style.recipe;
+    const prompt = buildGenerationPrompt({ name: style.name, recipe: style.recipe }, lead.answers);
+    promptSnapshot = prompt;
+    await logEventDoc({ type: 'generation_started', leadId });
+
+    const bucket = storage.bucket();
+    const [photoBytes] = await bucket.file(lead.originalPhotoPath).download();
+    const start = Date.now();
+    let out; let lastErr: unknown;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try { out = await gen.generate({ photoBytes, mimeType: 'image/jpeg', prompt }); break; }
+      catch (e) { lastErr = e; }
+    }
+    const durationMs = Date.now() - start;
+
+    if (!out) throw new Error(String(lastErr));
+
+    const genId = randomUUID();
+    const outputPath = `leads/${lead.ownerUid}/generated/${Date.now()}.png`;
+    await bucket.file(outputPath).save(out.imageBytes, { contentType: out.mimeType });
     await db.collection('generations').doc(genId).set(<GenerationRecord>{
-      id: genId, leadId, source: 'funnel', styleSlug: style.slug, recipeSnapshot: style.recipe,
-      promptSnapshot: prompt, inputPhotoPath: lead.originalPhotoPath, durationMs, costEstimate: 0,
-      status: 'failed', error: String(lastErr), createdAt: Date.now(),
+      id: genId, leadId, source: 'funnel', styleSlug, recipeSnapshot,
+      promptSnapshot, inputPhotoPath: lead.originalPhotoPath, outputPhotoPath: outputPath,
+      durationMs, costEstimate: out.costEstimate, status: 'success', createdAt: Date.now(),
     });
-    return;
+    assertTransition(lead.status, 'generated');
+    await ref.update({
+      status: 'generated',
+      generatedImagePaths: [...lead.generatedImagePaths, outputPath],
+      costEstimateTotal: lead.costEstimateTotal + out.costEstimate,
+      'timestamps.generated': Date.now(), updatedAt: Date.now(),
+    });
+    await logEventDoc({ type: 'generation_completed', leadId, meta: { durationMs } });
+  } catch (err) {
+    // Route ANY failure above to the same terminal state. We deliberately
+    // do NOT call assertTransition here: if the lead's current status is
+    // unexpected, assertTransition would throw and this failure handler
+    // itself would escape, re-breaking the no-throw guarantee we exist to
+    // provide. A direct update is used instead.
+    try {
+      const genId = randomUUID();
+      await db.collection('generations').doc(genId).set(<GenerationRecord>{
+        id: genId, leadId, source: 'funnel', styleSlug, recipeSnapshot,
+        promptSnapshot, inputPhotoPath, durationMs: 0, costEstimate: 0,
+        status: 'failed', error: String(err), createdAt: Date.now(),
+      });
+      await ref.update({ status: 'failed', 'timestamps.failed': Date.now(), updatedAt: Date.now() });
+    } catch {
+      // Even the failure-path writes must not escape runGeneration.
+    }
   }
-
-  const outputPath = `leads/${lead.ownerUid}/generated/${Date.now()}.png`;
-  await bucket.file(outputPath).save(out.imageBytes, { contentType: out.mimeType });
-  await db.collection('generations').doc(genId).set(<GenerationRecord>{
-    id: genId, leadId, source: 'funnel', styleSlug: style.slug, recipeSnapshot: style.recipe,
-    promptSnapshot: prompt, inputPhotoPath: lead.originalPhotoPath, outputPhotoPath: outputPath,
-    durationMs, costEstimate: out.costEstimate, status: 'success', createdAt: Date.now(),
-  });
-  assertTransition(lead.status, 'generated');
-  await ref.update({
-    status: 'generated',
-    generatedImagePaths: [...lead.generatedImagePaths, outputPath],
-    costEstimateTotal: lead.costEstimateTotal + out.costEstimate,
-    'timestamps.generated': Date.now(), updatedAt: Date.now(),
-  });
-  await logEventDoc({ type: 'generation_completed', leadId, meta: { durationMs } });
 }
 
 export const onLeadPaid = onDocumentUpdated('leads/{leadId}', async (event) => {
