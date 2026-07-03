@@ -1,6 +1,6 @@
 import { httpsCallable } from 'firebase/functions';
 import { collection, doc, getDoc, getDocs, onSnapshot, orderBy, query, where } from 'firebase/firestore';
-import { ref, uploadBytes } from 'firebase/storage';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { db, functions, storage } from './client';
 import type {
   AnalyticsEventType,
@@ -130,6 +130,23 @@ export function watchLead(leadId: string, cb: (lead: Lead | undefined) => void):
   return onSnapshot(doc(db, 'leads', leadId), (snap) => {
     cb(snap.exists() ? (snap.data() as Lead) : undefined);
   });
+}
+
+/**
+ * One-shot read of a lead doc. Per firestore.rules the owner (matching
+ * `ownerUid`) or an admin may read a lead directly.
+ */
+export async function fetchLead(leadId: string): Promise<Lead | undefined> {
+  const snap = await getDoc(doc(db, 'leads', leadId));
+  return snap.exists() ? (snap.data() as Lead) : undefined;
+}
+
+/**
+ * Resolves a Storage path (e.g. a lead's original/generated photo) to a
+ * viewable download URL. Works against both the emulator and production.
+ */
+export async function getImageUrl(path: string): Promise<string> {
+  return getDownloadURL(ref(storage, path));
 }
 
 export async function uploadOriginalPhoto(uid: string, file: File): Promise<string> {
