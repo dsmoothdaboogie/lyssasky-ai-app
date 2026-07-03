@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, beforeAll, afterAll } from 'vitest';
 import { initializeTestEnvironment, assertFails, assertSucceeds, RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { readFileSync } from 'fs';
 
@@ -30,5 +30,32 @@ describe('firestore rules', () => {
   it('allows anyone to read styles', async () => {
     const anon = env.unauthenticatedContext().firestore();
     await assertSucceeds(anon.collection('styles').doc('scandi').get());
+  });
+
+  it("lets an admin read another user's lead", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().collection('leads').doc('l2').set({ ownerUid: 'u1', status: 'captured' });
+    });
+    const admin = env.authenticatedContext('admin1', { admin: true }).firestore();
+    await assertSucceeds(admin.collection('leads').doc('l2').get());
+  });
+
+  it('lets an admin read a generations doc and an events doc', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await db.collection('generations').doc('g1').set({ leadId: 'l1' });
+      await db.collection('events').doc('e1').set({ type: 'lead_captured' });
+    });
+    const admin = env.authenticatedContext('admin1', { admin: true }).firestore();
+    await assertSucceeds(admin.collection('generations').doc('g1').get());
+    await assertSucceeds(admin.collection('events').doc('e1').get());
+  });
+
+  it('forbids a non-admin authenticated user from reading a generations doc', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().collection('generations').doc('g2').set({ leadId: 'l1' });
+    });
+    const u1 = env.authenticatedContext('u1').firestore();
+    await assertFails(u1.collection('generations').doc('g2').get());
   });
 });
