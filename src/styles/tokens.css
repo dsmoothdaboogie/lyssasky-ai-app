@@ -1,0 +1,48 @@
+/*
+ * Lyssasky brand tokens.
+ * Warm, editorial, calm. System fonts only — no external/CDN fonts,
+ * so the app works fully offline.
+ */
+:root {
+  /* Color */
+  --color-bg: #fbf7f2;
+  --color-ink: #2e2a26;
+  --color-ink-muted: #6b6259;
+  --color-accent: #c67b5c;
+  --color-accent-hover: #b56b4c;
+  --color-accent-ink: #ffffff;
+  --color-secondary: #7c8a72;
+  --color-secondary-hover: #6c7a62;
+  --color-border: #e7ded3;
+  --color-surface: #ffffff;
+  --color-danger: #b3493f;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* Type — system stacks only */
+  --font-display: ui-serif, Georgia, 'Iowan Old Style', 'Apple Garamond',
+    'Palatino Linotype', 'Times New Roman', serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Roboto,
+    Helvetica, Arial, sans-serif;
+
+  /* Layout */
+  --funnel-max-width: 460px;
+
+  /* Elevation */
+  --shadow-soft: 0 8px 24px -12px rgba(46, 42, 38, 0.18), 0 2px 8px -4px rgba(46, 42, 38, 0.1);
+  --shadow-lift: 0 16px 40px -16px rgba(46, 42, 38, 0.24);
+}
