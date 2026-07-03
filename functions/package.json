@@ -8,7 +8,8 @@
     "build": "tsc",
     "serve": "npm run build && firebase emulators:start --only functions",
     "test": "vitest run",
-    "seed:admin": "tsx src/seed/seedAdmin.ts"
+    "seed:admin": "tsx src/seed/seedAdmin.ts",
+    "seed": "tsx src/seed/seed.ts"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",
