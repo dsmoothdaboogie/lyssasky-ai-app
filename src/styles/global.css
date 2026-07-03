@@ -197,3 +197,46 @@ select:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;
 }
+
+/* Wait screen: a calm, CSS-only breathing animation, no external assets. */
+.wait-animation {
+  position: relative;
+  width: 4rem;
+  height: 4rem;
+  margin: var(--space-5) auto var(--space-6);
+}
+
+.wait-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--color-accent);
+  opacity: 0.35;
+  animation: lyssasky-breathe 2.4s ease-in-out infinite;
+}
+
+.wait-pulse-delay {
+  animation-delay: 1.2s;
+}
+
+@keyframes lyssasky-breathe {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.5;
+  }
+  70% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wait-pulse {
+    animation: none;
+    opacity: 0.35;
+  }
+}
