@@ -4,6 +4,7 @@ import { Placeholder } from './funnel/Placeholder';
 import { LandingPage } from './funnel/LandingPage';
 import { UploadStep } from './funnel/UploadStep';
 import { QuestionnaireStep } from './funnel/QuestionnaireStep';
+import { EmailStep } from './funnel/EmailStep';
 
 export default function App() {
   return (
@@ -12,7 +13,7 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/upload" element={<UploadStep />} />
         <Route path="/questionnaire" element={<QuestionnaireStep />} />
-        <Route path="/email" element={<Placeholder name="Email" />} />
+        <Route path="/email" element={<EmailStep />} />
         <Route path="/mock-checkout" element={<Placeholder name="MockCheckout" />} />
         <Route path="/wait" element={<Placeholder name="Wait" />} />
         <Route path="/result" element={<Placeholder name="Result" />} />
