@@ -4,3 +4,4 @@ export const helloWorld = onCall(() => ({ ok: true }));
 
 export { createLead, updateLeadAnswers } from './leads';
 export { logEvent } from './events';
+export { startCheckout, confirmPaymentMock } from './checkout';
