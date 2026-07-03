@@ -1,14 +1,46 @@
 import { httpsCallable } from 'firebase/functions';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import { ref, uploadBytes } from 'firebase/storage';
 import { db, functions, storage } from './client';
 import type {
   AnalyticsEventType,
+  AppConfig,
   Lead,
   QuestionnaireAnswers,
+  Style,
 } from '../domain/types';
+import { DEFAULT_CONFIG } from '../config/defaultConfig';
 
 type Ok = { ok: true };
+
+/**
+ * `config/app` is world-readable per firestore.rules. Falls back to
+ * DEFAULT_CONFIG if the document hasn't been seeded yet.
+ */
+export async function fetchAppConfig(): Promise<AppConfig> {
+  const snap = await getDoc(doc(db, 'config', 'app'));
+  return snap.exists() ? (snap.data() as AppConfig) : DEFAULT_CONFIG;
+}
+
+/**
+ * `styles` is world-readable per firestore.rules. Fetches active styles
+ * ordered by sortOrder. If the compound where+orderBy query ever needs a
+ * composite index that isn't provisioned (e.g. a fresh emulator), fall back
+ * to filtering client-side and sorting in JS.
+ */
+export async function fetchActiveStyles(): Promise<Style[]> {
+  try {
+    const q = query(collection(db, 'styles'), where('active', '==', true), orderBy('sortOrder'));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => d.data() as Style);
+  } catch {
+    const snap = await getDocs(collection(db, 'styles'));
+    return snap.docs
+      .map((d) => d.data() as Style)
+      .filter((s) => s.active)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+}
 
 export async function apiCreateLead(): Promise<{ leadId: string; leadToken: string }> {
   const fn = httpsCallable<void, { leadId: string; leadToken: string }>(functions, 'createLead');

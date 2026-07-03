@@ -42,7 +42,7 @@ export interface AppConfig {
   questionnaire: QuestionDef[];
 }
 
-export interface QuestionOption { value: string; label: string; imageUrl?: string; }
+export interface QuestionOption { value: string; label: string; imageUrl?: string; description?: string; }
 export interface QuestionDef {
   id: keyof QuestionnaireAnswers; // 'roomType' | 'styleSlug' | ...
   prompt: string;
