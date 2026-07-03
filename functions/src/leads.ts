@@ -46,6 +46,21 @@ export const updateLeadAnswers = onCall(async (req) => {
   return { ok: true };
 });
 
+export async function attachPhotoDoc(leadId: string, uid: string, path: string): Promise<void> {
+  const ref = db.collection('leads').doc(leadId);
+  const lead = (await ref.get()).data() as Lead | undefined;
+  if (!lead) throw new HttpsError('not-found', 'Lead not found');
+  assertOwner(uid, lead);
+  await ref.update({ originalPhotoPath: path, updatedAt: Date.now() });
+  await logEventDoc({ type: 'photo_uploaded', leadId });
+}
+
+export const attachPhoto = onCall(async (req) => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Sign-in required');
+  await attachPhotoDoc(req.data.leadId, req.auth.uid, req.data.path);
+  return { ok: true };
+});
+
 export async function submitFeedbackDoc(
   leadId: string,
   uid: string,

@@ -44,6 +44,12 @@ export async function apiConfirmPaymentMock(leadId: string, sessionId: string): 
   return res.data;
 }
 
+export async function apiAttachPhoto(leadId: string, path: string): Promise<Ok> {
+  const fn = httpsCallable<{ leadId: string; path: string }, Ok>(functions, 'attachPhoto');
+  const res = await fn({ leadId, path });
+  return res.data;
+}
+
 export async function apiSubmitFeedback(
   leadId: string,
   rating: number,
