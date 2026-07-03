@@ -2,9 +2,13 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import App from './App';
 
-test('renders the landing placeholder at the root route', () => {
+vi.mock('./firebase/api', () => ({
+  apiLogEvent: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
+test('renders the landing page at the root route', () => {
   render(<MemoryRouter><App /></MemoryRouter>);
-  expect(screen.getByText(/landing — coming soon/i)).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: /see your room, restyled/i })).toBeInTheDocument();
 });
 
 test('renders the Lyssasky wordmark via the funnel shell', () => {
