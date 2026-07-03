@@ -8,6 +8,7 @@ import { EmailStep } from './funnel/EmailStep';
 import { MockCheckoutPage } from './funnel/MockCheckoutPage';
 import { WaitScreen } from './funnel/WaitScreen';
 import { ResultStep } from './funnel/ResultStep';
+import { BookingStep } from './funnel/BookingStep';
 
 export default function App() {
   return (
@@ -20,7 +21,7 @@ export default function App() {
         <Route path="/mock-checkout" element={<MockCheckoutPage />} />
         <Route path="/wait" element={<WaitScreen />} />
         <Route path="/result" element={<ResultStep />} />
-        <Route path="/book" element={<Placeholder name="Booking" />} />
+        <Route path="/book" element={<BookingStep />} />
         <Route path="/admin/*" element={<Placeholder name="Admin" />} />
       </Routes>
     </FunnelProvider>
