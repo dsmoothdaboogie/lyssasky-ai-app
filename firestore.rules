@@ -1,6 +1,16 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{db}/documents {
-    match /{document=**} { allow read, write: if false; }
+    function isAdmin() { return request.auth != null && request.auth.token.admin == true; }
+
+    match /styles/{id}   { allow read: if true;  allow write: if false; }
+    match /config/{id}   { allow read: if true;  allow write: if false; }
+    match /generations/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /events/{id}   { allow read: if isAdmin(); allow write: if false; }
+    match /leads/{id} {
+      allow read: if isAdmin() ||
+        (request.auth != null && resource.data.ownerUid == request.auth.uid);
+      allow write: if false;
+    }
   }
 }
