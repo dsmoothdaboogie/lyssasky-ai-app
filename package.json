@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "bash scripts/e2e.sh"
+    "e2e": "bash scripts/e2e.sh",
+    "emulator": "firebase emulators:start --project demo-lyssasky --only auth,firestore,storage,functions",
+    "seed": "bash scripts/seed.sh"
   },
   "dependencies": {
     "firebase": "^12.15.0",
