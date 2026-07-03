@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { FunnelLayout } from './FunnelLayout';
 import { Button } from '../components/Button';
 import { useFunnelState } from './useFunnelState';
-import { apiSubmitBooking, fetchAppConfig, apiLogEvent } from '../firebase/api';
+import { apiSubmitBooking, fetchAppConfig } from '../firebase/api';
 import { ensureAnonymousAuth } from '../firebase/client';
 
 const GENERIC_ERROR = "Something went wrong on our end — please try again in a moment.";
@@ -78,7 +78,6 @@ export function BookingStep() {
         ...(trimmedPhone ? { phone: trimmedPhone } : {}),
         ...(trimmedNote ? { note: trimmedNote } : {}),
       });
-      apiLogEvent('booking_submitted', leadId);
       setSubmitted(true);
     } catch {
       setError(GENERIC_ERROR);
