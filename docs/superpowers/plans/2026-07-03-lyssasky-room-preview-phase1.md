@@ -1055,7 +1055,17 @@ export function createGeminiGenerationProvider(apiKey: string): GenerationProvid
 
 ## Milestone 3 — Backend functions (emulator integration, TDD)
 
-All tasks in this milestone run against the emulator. Add `functions/src/testHelpers.ts` with an emulator Firestore/Storage handle and a helper to run functions. Integration tests use `firebase-functions-test` in offline mode **or** call the exported plain helpers directly against the emulator (preferred — simpler). Set `FIRESTORE_EMULATOR_HOST=localhost:8080` and `FIREBASE_STORAGE_EMULATOR_HOST=localhost:9199` in the test env; start the emulator (`firebase emulators:start --only firestore,storage,auth`) before running these tests.
+All tasks in this milestone run against the emulator. Integration tests call the exported plain helpers (e.g. `createLeadDoc`, `handlePaymentConfirmed`, `runGeneration`) directly against the emulator — no `firebase-functions-test` needed.
+
+**How to run integration tests (canonical command):** use `firebase emulators:exec`, which boots the emulators, injects the emulator host env vars (`FIRESTORE_EMULATOR_HOST`, `FIREBASE_AUTH_EMULATOR_HOST`, `FIREBASE_STORAGE_EMULATOR_HOST`) and `GCLOUD_PROJECT` into the child process, runs the command, and tears everything down:
+
+```bash
+# from repo root
+firebase emulators:exec --project demo-lyssasky --only auth,firestore,storage \
+  'cd functions && npx vitest run src/leads.integration.test.ts'
+```
+
+Name integration test files `*.integration.test.ts` so they are easy to target. The Admin SDK in `functions/src/admin.ts` connects to the emulator automatically when those env vars are present — no code change between test and prod. Do NOT hardcode `localhost:8080` in test code; rely on the injected env. (Storage-backed tests also need the Admin app initialized with a `storageBucket`; Task 13 handles that.)
 
 ### Task 10: `createLead` + config loader
 
