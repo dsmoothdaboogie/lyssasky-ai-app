@@ -7,7 +7,7 @@ import { useFunnelState } from './useFunnelState';
 import { validatePhotoMeta, validateDimensions } from '../domain/uploadValidation';
 import { readImageDimensions } from './imageDimensions';
 import { ensureAnonymousAuth } from '../firebase/client';
-import { apiCreateLead, apiAttachPhoto, apiLogEvent, uploadOriginalPhoto } from '../firebase/api';
+import { apiCreateLead, apiAttachPhoto, uploadOriginalPhoto } from '../firebase/api';
 
 const GENERIC_ERROR = "Something went wrong uploading your photo — please try again.";
 const CONVERSION_ERROR = "We couldn't read that photo — please try a JPEG or PNG instead.";
@@ -75,7 +75,6 @@ export function UploadStep() {
 
         const path = await uploadOriginalPhoto(uid, workingFile);
         await apiAttachPhoto(leadId, path);
-        await apiLogEvent('photo_uploaded', leadId);
 
         navigate('/questionnaire');
       } catch {

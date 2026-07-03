@@ -3,7 +3,7 @@ import type { ChangeEvent, FormEvent } from 'react';
 import { FunnelLayout } from './FunnelLayout';
 import { Button } from '../components/Button';
 import { useFunnelState } from './useFunnelState';
-import { apiUpdateLeadAnswers, apiStartCheckout, apiLogEvent } from '../firebase/api';
+import { apiUpdateLeadAnswers, apiStartCheckout } from '../firebase/api';
 import { redirectTo } from './redirect';
 import type { QuestionnaireAnswers } from '../domain/types';
 
@@ -50,7 +50,6 @@ export function EmailStep() {
     try {
       setEmail(trimmed);
       await apiUpdateLeadAnswers(leadId, answers as QuestionnaireAnswers, trimmed);
-      await apiLogEvent('email_captured', leadId);
       const { checkoutUrl } = await apiStartCheckout(leadId);
       redirectTo(checkoutUrl);
     } catch {

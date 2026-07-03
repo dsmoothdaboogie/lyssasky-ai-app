@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { FunnelProvider, useFunnelState } from './useFunnelState';
 import { EmailStep } from './EmailStep';
-import { apiUpdateLeadAnswers, apiStartCheckout, apiLogEvent } from '../firebase/api';
+import { apiUpdateLeadAnswers, apiStartCheckout } from '../firebase/api';
 import { redirectTo } from './redirect';
 import type { QuestionnaireAnswers } from '../domain/types';
 
@@ -23,7 +23,6 @@ vi.mock('../firebase/api', () => ({
   apiStartCheckout: vi.fn().mockResolvedValue({
     checkoutUrl: 'http://localhost:5173/mock-checkout?lead=l1&session=mock_l1',
   }),
-  apiLogEvent: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
 vi.mock('./redirect', () => ({
@@ -68,7 +67,6 @@ describe('EmailStep', () => {
     vi.clearAllMocks();
     (apiUpdateLeadAnswers as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true });
     (apiStartCheckout as ReturnType<typeof vi.fn>).mockResolvedValue({ checkoutUrl: CHECKOUT_URL });
-    (apiLogEvent as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true });
   });
 
   it('shows a friendly error for an invalid email and does not call the API', async () => {

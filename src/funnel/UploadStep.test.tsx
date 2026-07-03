@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { FunnelProvider } from './useFunnelState';
 import { UploadStep } from './UploadStep';
-import { apiCreateLead, apiAttachPhoto, apiLogEvent, uploadOriginalPhoto } from '../firebase/api';
+import { apiCreateLead, apiAttachPhoto, uploadOriginalPhoto } from '../firebase/api';
 import { ensureAnonymousAuth } from '../firebase/client';
 import { readImageDimensions } from './imageDimensions';
 import heic2any from 'heic2any';
@@ -12,7 +12,6 @@ vi.mock('../firebase/api', () => ({
   apiCreateLead: vi.fn().mockResolvedValue({ leadId: 'l1', leadToken: 't' }),
   uploadOriginalPhoto: vi.fn().mockResolvedValue('leads/u1/original.jpg'),
   apiAttachPhoto: vi.fn().mockResolvedValue({ ok: true }),
-  apiLogEvent: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
 vi.mock('../firebase/client', () => ({
@@ -58,7 +57,6 @@ describe('UploadStep', () => {
     (apiCreateLead as ReturnType<typeof vi.fn>).mockResolvedValue({ leadId: 'l1', leadToken: 't' });
     (uploadOriginalPhoto as ReturnType<typeof vi.fn>).mockResolvedValue('leads/u1/original.jpg');
     (apiAttachPhoto as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true });
-    (apiLogEvent as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true });
     (readImageDimensions as ReturnType<typeof vi.fn>).mockResolvedValue({ width: 1024, height: 1024 });
     (heic2any as ReturnType<typeof vi.fn>).mockResolvedValue(
       new Blob(['converted-bytes'], { type: 'image/jpeg' })
