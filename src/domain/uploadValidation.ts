@@ -20,7 +20,7 @@ export function validatePhotoMeta(
   if (!opts.allowedTypes.includes(type)) {
     return { ok: false, error: 'Please upload a photo (JPEG, PNG, WebP, or HEIC).' };
   }
-  if (file.size > opts.maxBytes) {
+  if (file.size >= opts.maxBytes) {
     return { ok: false, error: 'That photo is too large — please keep it under 10MB.' };
   }
   return { ok: true, needsConversion: HEIC.includes(type) || undefined };

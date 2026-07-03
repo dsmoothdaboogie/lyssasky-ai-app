@@ -122,13 +122,34 @@ export async function regenerateDoc(
     if (lead.status !== 'generated' && lead.status !== 'rated' && lead.status !== 'failed') {
       throw new HttpsError('failed-precondition', 'Regeneration is only available after your first design is ready.');
     }
-  } else {
-    assertOwner(uid, lead);
-    if (lead.status !== 'generated' && lead.status !== 'rated') {
-      throw new HttpsError('failed-precondition', 'Regeneration is only available after your first design is ready.');
-    }
+    await runGeneration(leadId);
+    return;
   }
+
+  assertOwner(uid, lead);
+  // Owners may retry a failed generation (e.g. from the WaitScreen's "Try
+  // again" button) in addition to re-rolling a completed one.
+  if (lead.status !== 'generated' && lead.status !== 'rated' && lead.status !== 'failed') {
+    throw new HttpsError('failed-precondition', 'Regeneration is only available after your first design is ready.');
+  }
+
+  // Server-side enforcement of the "one free re-generate" cap. A retry of a
+  // FAILED generation doesn't consume the customer's free re-generate — only
+  // a regenerate kicked off from an already-successful ('generated'/'rated')
+  // lead counts toward the cap.
+  const countsTowardCap = lead.status === 'generated' || lead.status === 'rated';
+  if (countsTowardCap && (lead.regenerateCount ?? 0) >= 1) {
+    throw new HttpsError(
+      'resource-exhausted',
+      "You've already used your free re-generate — book a consult with Marjorie to explore more."
+    );
+  }
+
   await runGeneration(leadId);
+
+  if (countsTowardCap) {
+    await ref.update({ regenerateCount: (lead.regenerateCount ?? 0) + 1 });
+  }
 }
 
 export const regenerate = onCall(async (req) => {

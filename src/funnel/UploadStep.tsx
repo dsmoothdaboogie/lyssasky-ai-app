@@ -73,7 +73,7 @@ export function UploadStep() {
         setUid(uid);
         setOriginalPhotoPreviewUrl(URL.createObjectURL(workingFile));
 
-        const path = await uploadOriginalPhoto(uid, workingFile);
+        const path = await uploadOriginalPhoto(uid, leadId, workingFile);
         await apiAttachPhoto(leadId, path);
 
         navigate('/questionnaire');

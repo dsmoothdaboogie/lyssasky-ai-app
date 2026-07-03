@@ -101,10 +101,42 @@ export async function runGeneration(leadId: string, provider?: GenerationProvide
   }
 }
 
+/**
+ * Firestore triggers are delivered at-least-once, so the same 'paid'
+ * transition can invoke this handler more than once (e.g. a redelivery after
+ * a transient error, or two near-simultaneous deliveries of the same
+ * event). Without a guard, a redelivery would call runGeneration a second
+ * time and append a second generated image / double the cost estimate.
+ *
+ * We claim the lead inside a Firestore transaction: it reads the *live*
+ * document (not the trigger's before/after snapshot, which can be stale by
+ * the time a redelivery runs) and only proceeds if the lead is still
+ * 'paid' and hasn't already been claimed. Firestore serializes conflicting
+ * transactions on the same document — if two claims race, only one commits
+ * and the other's transaction retries against the now-claimed document and
+ * bails out.
+ */
+async function claimLeadForGeneration(leadId: string): Promise<boolean> {
+  const ref = db.collection('leads').doc(leadId);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const lead = snap.data() as Lead | undefined;
+    if (!lead || lead.status !== 'paid' || lead.generationClaimedAt) return false;
+    tx.update(ref, { generationClaimedAt: Date.now() });
+    return true;
+  });
+}
+
+export async function handleLeadPaid(leadId: string): Promise<void> {
+  const claimed = await claimLeadForGeneration(leadId);
+  if (!claimed) return;
+  await runGeneration(leadId);
+}
+
 export const onLeadPaid = onDocumentUpdated('leads/{leadId}', async (event) => {
   const before = event.data?.before.data() as Lead | undefined;
   const after = event.data?.after.data() as Lead | undefined;
   if (before?.status !== 'paid' && after?.status === 'paid') {
-    await runGeneration(event.params.leadId);
+    await handleLeadPaid(event.params.leadId);
   }
 });

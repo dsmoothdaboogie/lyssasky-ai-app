@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { db, storage } from '../admin';
-import { runGeneration } from './runGeneration';
+import { runGeneration, handleLeadPaid } from './runGeneration';
 import { createMockGenerationProvider } from './mockProvider';
 import type { GenerationProvider } from './provider';
 
@@ -84,5 +84,54 @@ describe('runGeneration', () => {
     expect(gens.size).toBe(1);
     expect(gens.docs[0].data().status).toBe('failed');
     expect(gens.docs[0].data().error).toMatch(/Unknown style/);
+  });
+});
+
+describe('handleLeadPaid (onLeadPaid idempotency guard)', () => {
+  it('does not append a second image when invoked twice for the same paid lead', async () => {
+    await seedStyle();
+    const ref = db.collection('leads').doc();
+    await ref.set({
+      id: ref.id, ownerUid: 'u4', leadToken: 't4', status: 'paid',
+      answers: { roomType: 'living_room', styleSlug: 'scandi', colorMood: 'warm_cozy', budget: '1k_5k', timeline: 'asap' },
+      originalPhotoPath: 'leads/u4/original.jpg',
+      generatedImagePaths: [], costEstimateTotal: 0, timestamps: {}, createdAt: 0, updatedAt: 0,
+    });
+    await seedOriginalPhoto('leads/u4/original.jpg');
+
+    // Simulates the real trigger's first delivery.
+    await handleLeadPaid(ref.id);
+    const afterFirst = (await ref.get()).data()!;
+    expect(afterFirst.status).toBe('generated');
+    expect(afterFirst.generatedImagePaths).toHaveLength(1);
+
+    // Simulates an at-least-once redelivery of the same 'paid' event. The
+    // live lead is no longer 'paid' (it's 'generated'), so the claim must
+    // fail and generation must not run again.
+    await handleLeadPaid(ref.id);
+    const afterSecond = (await ref.get()).data()!;
+    expect(afterSecond.generatedImagePaths).toHaveLength(1);
+    expect(afterSecond.status).toBe('generated');
+    const gens = await db.collection('generations').where('leadId', '==', ref.id).get();
+    expect(gens.size).toBe(1);
+  });
+
+  it('does not double-generate when two claims race on a still-paid lead', async () => {
+    await seedStyle();
+    const ref = db.collection('leads').doc();
+    await ref.set({
+      id: ref.id, ownerUid: 'u5', leadToken: 't5', status: 'paid',
+      answers: { roomType: 'living_room', styleSlug: 'scandi', colorMood: 'warm_cozy', budget: '1k_5k', timeline: 'asap' },
+      originalPhotoPath: 'leads/u5/original.jpg',
+      generatedImagePaths: [], costEstimateTotal: 0, timestamps: {}, createdAt: 0, updatedAt: 0,
+    });
+    await seedOriginalPhoto('leads/u5/original.jpg');
+
+    // Two concurrent "redeliveries" of the same trigger event.
+    await Promise.all([handleLeadPaid(ref.id), handleLeadPaid(ref.id)]);
+    const gens = await db.collection('generations').where('leadId', '==', ref.id).get();
+    expect(gens.size).toBe(1);
+    const lead = (await ref.get()).data()!;
+    expect(lead.generatedImagePaths).toHaveLength(1);
   });
 });

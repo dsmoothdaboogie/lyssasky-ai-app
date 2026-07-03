@@ -10,7 +10,7 @@ import heic2any from 'heic2any';
 
 vi.mock('../firebase/api', () => ({
   apiCreateLead: vi.fn().mockResolvedValue({ leadId: 'l1', leadToken: 't' }),
-  uploadOriginalPhoto: vi.fn().mockResolvedValue('leads/u1/original.jpg'),
+  uploadOriginalPhoto: vi.fn().mockResolvedValue('leads/u1/l1/original.jpg'),
   apiAttachPhoto: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
@@ -55,7 +55,7 @@ describe('UploadStep', () => {
     vi.clearAllMocks();
     (ensureAnonymousAuth as ReturnType<typeof vi.fn>).mockResolvedValue('u1');
     (apiCreateLead as ReturnType<typeof vi.fn>).mockResolvedValue({ leadId: 'l1', leadToken: 't' });
-    (uploadOriginalPhoto as ReturnType<typeof vi.fn>).mockResolvedValue('leads/u1/original.jpg');
+    (uploadOriginalPhoto as ReturnType<typeof vi.fn>).mockResolvedValue('leads/u1/l1/original.jpg');
     (apiAttachPhoto as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true });
     (readImageDimensions as ReturnType<typeof vi.fn>).mockResolvedValue({ width: 1024, height: 1024 });
     (heic2any as ReturnType<typeof vi.fn>).mockResolvedValue(
@@ -86,8 +86,8 @@ describe('UploadStep', () => {
     await user.upload(getFileInput(), jpeg);
 
     await waitFor(() => expect(apiCreateLead).toHaveBeenCalled());
-    expect(uploadOriginalPhoto).toHaveBeenCalledWith('u1', expect.any(File));
-    expect(apiAttachPhoto).toHaveBeenCalledWith('l1', 'leads/u1/original.jpg');
+    expect(uploadOriginalPhoto).toHaveBeenCalledWith('u1', 'l1', expect.any(File));
+    expect(apiAttachPhoto).toHaveBeenCalledWith('l1', 'leads/u1/l1/original.jpg');
 
     await waitFor(() => expect(screen.getByText('Questionnaire screen')).toBeInTheDocument());
   });
@@ -101,7 +101,7 @@ describe('UploadStep', () => {
 
     await waitFor(() => expect(heic2any).toHaveBeenCalled());
     await waitFor(() => expect(uploadOriginalPhoto).toHaveBeenCalled());
-    const uploadedFile = (uploadOriginalPhoto as ReturnType<typeof vi.fn>).mock.calls[0][1] as File;
+    const uploadedFile = (uploadOriginalPhoto as ReturnType<typeof vi.fn>).mock.calls[0][2] as File;
     expect(uploadedFile.type).toBe('image/jpeg');
 
     await waitFor(() => expect(screen.getByText('Questionnaire screen')).toBeInTheDocument());

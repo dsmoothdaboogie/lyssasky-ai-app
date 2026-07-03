@@ -23,6 +23,15 @@ describe('validatePhotoMeta', () => {
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/too large|10 ?mb/i);
   });
+  it('rejects a file exactly at the size cap (storage rule requires size < cap)', () => {
+    const r = validatePhotoMeta(f({ size: DEFAULT_PHOTO_OPTIONS.maxBytes }));
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/too large|10 ?mb/i);
+  });
+  it('accepts a file one byte under the size cap', () => {
+    const r = validatePhotoMeta(f({ size: DEFAULT_PHOTO_OPTIONS.maxBytes - 1 }));
+    expect(r.ok).toBe(true);
+  });
 });
 
 describe('validateDimensions', () => {

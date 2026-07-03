@@ -160,9 +160,16 @@ export async function getImageUrl(path: string): Promise<string> {
   return getDownloadURL(ref(storage, path));
 }
 
-export async function uploadOriginalPhoto(uid: string, file: File): Promise<string> {
-  const ext = file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
-  const path = `leads/${uid}/original.${ext}`;
+/**
+ * Writes to a lead-scoped path (`leads/{uid}/{leadId}/original.{ext}`) rather
+ * than a fixed `leads/{uid}/original.{ext}` path. The anonymous auth uid
+ * persists across browser sessions, so a repeat visitor running the funnel
+ * again would otherwise collide with their previous upload — and
+ * `storage.rules` denies `update`, so the second upload would fail outright.
+ */
+export async function uploadOriginalPhoto(uid: string, leadId: string, file: File): Promise<string> {
+  const ext = (file.name.split('.').pop() || '').toLowerCase() || 'jpg';
+  const path = `leads/${uid}/${leadId}/original.${ext}`;
   await uploadBytes(ref(storage, path), file);
   return path;
 }

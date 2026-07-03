@@ -131,4 +131,42 @@ describe('regenerateDoc', () => {
     const lead = (await db.collection('leads').doc(leadId).get()).data()!;
     expect(lead.status).toBe('booked');
   });
+
+  it('allows the OWNER to re-run their own failed lead (WaitScreen "Try again")', async () => {
+    await seedStyle();
+    const leadId = await seedGeneratedLead('owner10');
+    const originalPhotoPath = `leads/${leadId}/original.jpg`;
+    await db.collection('leads').doc(leadId).update({
+      originalPhotoPath, status: 'failed', 'timestamps.failed': Date.now(),
+    });
+    await storage.bucket().file(originalPhotoPath).save(Buffer.from('fakejpeg'), { contentType: 'image/jpeg' });
+
+    const before = (await db.collection('leads').doc(leadId).get()).data()!;
+    await regenerateDoc(leadId, 'owner10'); // no admin opts — owner path
+    const after = (await db.collection('leads').doc(leadId).get()).data()!;
+    expect(after.generatedImagePaths.length).toBe(before.generatedImagePaths.length + 1);
+    expect(after.status).toBe('generated');
+    // Retrying a failed generation must not consume the free re-generate.
+    expect(after.regenerateCount ?? 0).toBe(0);
+  });
+
+  it('rejects a second owner regenerate on a generated lead with resource-exhausted', async () => {
+    await seedStyle();
+    const leadId = await seedGeneratedLead('owner11');
+    const originalPhotoPath = `leads/${leadId}/original.jpg`;
+    await db.collection('leads').doc(leadId).update({ originalPhotoPath });
+    await storage.bucket().file(originalPhotoPath).save(Buffer.from('fakejpeg'), { contentType: 'image/jpeg' });
+
+    // First regenerate: allowed, consumes the free re-generate.
+    await regenerateDoc(leadId, 'owner11');
+    const afterFirst = (await db.collection('leads').doc(leadId).get()).data()!;
+    expect(afterFirst.status).toBe('generated');
+    expect(afterFirst.regenerateCount).toBe(1);
+
+    // Second regenerate: rejected server-side even though client state
+    // (which tracks "used" only in memory) may have been reset by a reload.
+    await expect(regenerateDoc(leadId, 'owner11')).rejects.toThrow(/resource-exhausted|free re-generate/i);
+    const afterSecond = (await db.collection('leads').doc(leadId).get()).data()!;
+    expect(afterSecond.generatedImagePaths.length).toBe(afterFirst.generatedImagePaths.length);
+  });
 });
