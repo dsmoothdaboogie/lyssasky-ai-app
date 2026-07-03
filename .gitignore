@@ -43,3 +43,6 @@ ui-debug.log
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright MCP scratch
+.playwright-mcp/
