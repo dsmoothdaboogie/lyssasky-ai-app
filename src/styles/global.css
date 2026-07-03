@@ -1,0 +1,399 @@
+@import './tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--space-3);
+  color: var(--color-ink);
+}
+
+h1 {
+  font-size: 2rem;
+}
+
+h2 {
+  font-size: 1.5rem;
+}
+
+h3 {
+  font-size: 1.15rem;
+}
+
+p {
+  margin: 0 0 var(--space-4);
+  color: var(--color-ink);
+}
+
+small,
+.text-muted {
+  color: var(--color-ink-muted);
+}
+
+a {
+  color: var(--color-accent);
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+/* Mobile-first centered funnel column. */
+.funnel-shell {
+  width: min(100%, var(--funnel-max-width));
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4) var(--space-8);
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.funnel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.funnel-wordmark {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.25rem;
+  letter-spacing: 0.01em;
+  color: var(--color-ink);
+}
+
+.funnel-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.funnel-progress-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-border);
+  transition: background-color 0.2s ease;
+}
+
+.funnel-progress-dot.is-complete {
+  background: var(--color-accent);
+}
+
+.funnel-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
+  padding: var(--space-5);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.btn-primary {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  box-shadow: var(--shadow-soft);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--color-secondary);
+  border-color: var(--color-secondary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(124, 138, 114, 0.08);
+}
+
+/* Form controls */
+input[type='text'],
+input[type='email'],
+input[type='tel'],
+input[type='password'],
+textarea,
+select {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* Wait screen: a calm, CSS-only breathing animation, no external assets. */
+.wait-animation {
+  position: relative;
+  width: 4rem;
+  height: 4rem;
+  margin: var(--space-5) auto var(--space-6);
+}
+
+.wait-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--color-accent);
+  opacity: 0.35;
+  animation: lyssasky-breathe 2.4s ease-in-out infinite;
+}
+
+.wait-pulse-delay {
+  animation-delay: 1.2s;
+}
+
+@keyframes lyssasky-breathe {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.5;
+  }
+  70% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wait-pulse {
+    animation: none;
+    opacity: 0.35;
+  }
+}
+
+/* Admin area: utilitarian but tidy, wider column than the funnel. */
+.admin-shell {
+  width: min(100%, var(--admin-max-width));
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4) var(--space-8);
+  min-height: 100%;
+}
+
+.admin-shell-centered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+}
+
+.admin-login-card {
+  width: min(100%, 360px);
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Leads list */
+.admin-leads-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.admin-leads-toolbar h1 {
+  margin: 0;
+}
+
+.admin-leads-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+  color: var(--color-ink-muted);
+}
+
+.admin-leads-toolbar select {
+  width: auto;
+  min-width: 140px;
+}
+
+.admin-leads-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.admin-leads-table th,
+.admin-leads-table td {
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.admin-leads-table th {
+  color: var(--color-ink-muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.admin-leads-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.status-chip {
+  display: inline-block;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  background: rgba(198, 123, 92, 0.15);
+  color: var(--color-accent-hover);
+}
+
+.status-chip-booked {
+  background: rgba(124, 138, 114, 0.18);
+  color: var(--color-secondary-hover);
+}
+
+.status-chip-failed {
+  background: rgba(179, 73, 63, 0.15);
+  color: var(--color-danger);
+}
+
+/* Lead card (admin pre-consult briefing) */
+.lead-card-photos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+@media (max-width: 640px) {
+  .lead-card-photos {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lead-card-photo-main {
+  width: 100%;
+  max-height: 360px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.lead-card-thumbnails {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.lead-card-photo-thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+
+.lead-card-answers {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+}
+
+.lead-card-answers dt {
+  color: var(--color-ink-muted);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.lead-card-answers dd {
+  margin: 0;
+}

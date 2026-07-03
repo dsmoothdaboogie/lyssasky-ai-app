@@ -1,0 +1,45 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Function secrets (real API keys etc). functions/.env.example is committed as a
+# template; functions/.env.local (and any other .env* variant, already covered by
+# *.local above but listed explicitly for clarity) must never be committed.
+functions/.env.local
+functions/.env
+functions/.env.*.local
+
+# Firebase
+functions/lib
+functions/node_modules
+.firebase*
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Playwright
+/playwright-report/
+/test-results/
+/blob-report/
+/playwright/.cache/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
