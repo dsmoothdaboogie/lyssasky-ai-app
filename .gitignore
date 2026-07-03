@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Function secrets (real API keys etc). functions/.env.example is committed as a
+# template; functions/.env.local (and any other .env* variant, already covered by
+# *.local above but listed explicitly for clarity) must never be committed.
+functions/.env.local
+functions/.env
+functions/.env.*.local
+
 # Firebase
 functions/lib
 functions/node_modules
