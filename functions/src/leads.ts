@@ -56,6 +56,9 @@ export async function submitFeedbackDoc(
   const lead = (await ref.get()).data() as Lead | undefined;
   if (!lead) throw new HttpsError('not-found', 'Lead not found');
   assertOwner(uid, lead);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    throw new HttpsError('invalid-argument', 'Rating must be a whole number from 1 to 5.');
+  }
   assertTransition(lead.status, 'rated');
   const now = Date.now();
   await ref.update({ rating, feedback, status: 'rated', 'timestamps.rated': now, updatedAt: now });
@@ -94,6 +97,9 @@ export async function regenerateDoc(leadId: string, uid: string): Promise<void> 
   const lead = (await ref.get()).data() as Lead | undefined;
   if (!lead) throw new HttpsError('not-found', 'Lead not found');
   assertOwner(uid, lead);
+  if (lead.status !== 'generated' && lead.status !== 'rated') {
+    throw new HttpsError('failed-precondition', 'Regeneration is only available after your first design is ready.');
+  }
   await runGeneration(leadId);
 }
 

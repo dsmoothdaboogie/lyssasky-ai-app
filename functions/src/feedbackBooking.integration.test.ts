@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { db } from './admin';
+import { db, storage } from './admin';
 import { createLeadDoc } from './leads';
-import { submitFeedbackDoc, submitBookingDoc } from './leads';
+import { submitFeedbackDoc, submitBookingDoc, regenerateDoc } from './leads';
 
 const answers = { roomType: 'living_room', styleSlug: 'scandi', colorMood: 'warm_cozy', budget: '1k_5k', timeline: 'asap' };
 
@@ -69,5 +69,43 @@ describe('submitBookingDoc', () => {
   it('rejects a non-existent lead', async () => {
     await expect(submitBookingDoc('does-not-exist', 'u', { name: 'X' }))
       .rejects.toThrow(/not.?found/i);
+  });
+});
+
+async function seedStyle() {
+  await db.collection('styles').doc('scandi').set({
+    slug: 'scandi', name: 'Scandinavian', description: 'Calm', galleryImages: [], sortOrder: 0, active: true,
+    recipe: { description: 'd', materials: 'oak', palette: 'warm', furniture: 'low', avoid: 'clutter' },
+  });
+}
+
+describe('regenerateDoc', () => {
+  it('rejects a non-owner', async () => {
+    const leadId = await seedGeneratedLead('owner5');
+    await expect(regenerateDoc(leadId, 'intruder'))
+      .rejects.toThrow(/permission/i);
+  });
+
+  it('rejects regeneration on a booked lead and leaves it booked', async () => {
+    const leadId = await seedGeneratedLead('owner6');
+    await submitBookingDoc(leadId, 'owner6', { name: 'Jane Doe' });
+    await expect(regenerateDoc(leadId, 'owner6'))
+      .rejects.toThrow(/only available/i);
+    const lead = (await db.collection('leads').doc(leadId).get()).data()!;
+    expect(lead.status).toBe('booked');
+  });
+
+  it('produces another image for a generated lead', async () => {
+    await seedStyle();
+    const leadId = await seedGeneratedLead('owner7');
+    const originalPhotoPath = `leads/${leadId}/original.jpg`;
+    await db.collection('leads').doc(leadId).update({ originalPhotoPath });
+    await storage.bucket().file(originalPhotoPath).save(Buffer.from('fakejpeg'), { contentType: 'image/jpeg' });
+
+    const before = (await db.collection('leads').doc(leadId).get()).data()!;
+    await regenerateDoc(leadId, 'owner7');
+    const after = (await db.collection('leads').doc(leadId).get()).data()!;
+    expect(after.generatedImagePaths.length).toBe(before.generatedImagePaths.length + 1);
+    expect(after.status).toBe('generated');
   });
 });
