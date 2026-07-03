@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { LoginPage } from './LoginPage';
 import { LeadsListPage } from './LeadsListPage';
+import { LeadCardPage } from './LeadCardPage';
 import { useAdminAuth } from './useAdminAuth';
 
 /**
@@ -13,8 +14,8 @@ import { useAdminAuth } from './useAdminAuth';
  *    admin tools).
  *  - admin    -> the admin shell with its own routes below.
  *
- * `/admin` redirects straight to the leads list. Task 29 adds the lead
- * detail card at /admin/leads/:id.
+ * `/admin` redirects straight to the leads list; `/admin/leads/:id` opens
+ * the pre-consult briefing card for a single lead.
  */
 export function AdminApp() {
   const { user, isAdmin, loading, signOut } = useAdminAuth();
@@ -56,7 +57,7 @@ export function AdminApp() {
         <Routes>
           <Route path="/admin" element={<Navigate to="/admin/leads" replace />} />
           <Route path="/admin/leads" element={<LeadsListPage />} />
-          {/* Task 29: <Route path="/admin/leads/:id" .../> */}
+          <Route path="/admin/leads/:id" element={<LeadCardPage />} />
         </Routes>
       </main>
     </div>

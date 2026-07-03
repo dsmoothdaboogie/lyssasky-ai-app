@@ -107,19 +107,33 @@ export const submitBooking = onCall(async (req) => {
   return { ok: true };
 });
 
-export async function regenerateDoc(leadId: string, uid: string): Promise<void> {
+export async function regenerateDoc(
+  leadId: string,
+  uid: string,
+  opts?: { isAdmin?: boolean }
+): Promise<void> {
   const ref = db.collection('leads').doc(leadId);
   const lead = (await ref.get()).data() as Lead | undefined;
   if (!lead) throw new HttpsError('not-found', 'Lead not found');
-  assertOwner(uid, lead);
-  if (lead.status !== 'generated' && lead.status !== 'rated') {
-    throw new HttpsError('failed-precondition', 'Regeneration is only available after your first design is ready.');
+
+  if (opts?.isAdmin) {
+    // Admins may re-run a failed generation too, but never a lead that's
+    // been paid/booked but not yet generated, or already booked.
+    if (lead.status !== 'generated' && lead.status !== 'rated' && lead.status !== 'failed') {
+      throw new HttpsError('failed-precondition', 'Regeneration is only available after your first design is ready.');
+    }
+  } else {
+    assertOwner(uid, lead);
+    if (lead.status !== 'generated' && lead.status !== 'rated') {
+      throw new HttpsError('failed-precondition', 'Regeneration is only available after your first design is ready.');
+    }
   }
   await runGeneration(leadId);
 }
 
 export const regenerate = onCall(async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Sign-in required');
-  await regenerateDoc(req.data.leadId, req.auth.uid);
+  const isAdmin = req.auth.token?.admin === true;
+  await regenerateDoc(req.data.leadId, req.auth.uid, { isAdmin });
   return { ok: true };
 });

@@ -344,3 +344,56 @@ select:focus-visible {
   background: rgba(179, 73, 63, 0.15);
   color: var(--color-danger);
 }
+
+/* Lead card (admin pre-consult briefing) */
+.lead-card-photos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+@media (max-width: 640px) {
+  .lead-card-photos {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lead-card-photo-main {
+  width: 100%;
+  max-height: 360px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.lead-card-thumbnails {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.lead-card-photo-thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+
+.lead-card-answers {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+}
+
+.lead-card-answers dt {
+  color: var(--color-ink-muted);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.lead-card-answers dd {
+  margin: 0;
+}

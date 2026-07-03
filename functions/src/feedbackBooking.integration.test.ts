@@ -108,4 +108,27 @@ describe('regenerateDoc', () => {
     expect(after.generatedImagePaths.length).toBe(before.generatedImagePaths.length + 1);
     expect(after.status).toBe('generated');
   });
+
+  it('allows an admin to re-run a failed lead even though they are not the owner', async () => {
+    await seedStyle();
+    const leadId = await seedGeneratedLead('owner8');
+    const originalPhotoPath = `leads/${leadId}/original.jpg`;
+    await db.collection('leads').doc(leadId).update({ originalPhotoPath, status: 'failed', 'timestamps.failed': Date.now() });
+    await storage.bucket().file(originalPhotoPath).save(Buffer.from('fakejpeg'), { contentType: 'image/jpeg' });
+
+    const before = (await db.collection('leads').doc(leadId).get()).data()!;
+    await regenerateDoc(leadId, 'someAdminUid', { isAdmin: true });
+    const after = (await db.collection('leads').doc(leadId).get()).data()!;
+    expect(after.generatedImagePaths.length).toBe(before.generatedImagePaths.length + 1);
+    expect(after.status).toBe('generated');
+  });
+
+  it('rejects an admin re-run on a booked lead', async () => {
+    const leadId = await seedGeneratedLead('owner9');
+    await submitBookingDoc(leadId, 'owner9', { name: 'Jane Doe' });
+    await expect(regenerateDoc(leadId, 'someAdminUid', { isAdmin: true }))
+      .rejects.toThrow(/only available/i);
+    const lead = (await db.collection('leads').doc(leadId).get()).data()!;
+    expect(lead.status).toBe('booked');
+  });
 });
