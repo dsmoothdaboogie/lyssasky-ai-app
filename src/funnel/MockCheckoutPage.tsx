@@ -105,6 +105,10 @@ export function MockCheckoutPage() {
             Simulate cancel
           </Button>
         </div>
+        <p className="text-muted" style={{ marginTop: 'var(--space-3)', fontSize: '0.85rem' }}>
+          No worries if you're not ready — you can come back and pick up right
+          where you left off.
+        </p>
       </section>
     </FunnelLayout>
   );
