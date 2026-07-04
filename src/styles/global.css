@@ -271,6 +271,36 @@ select:focus-visible {
   border-bottom: 1px solid var(--color-border);
 }
 
+.admin-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+}
+
+.admin-nav-link {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  color: var(--color-ink-muted);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.admin-nav-link:hover {
+  color: var(--color-ink);
+  background: var(--color-border);
+}
+
+.admin-nav-link-active {
+  color: var(--color-accent-ink);
+  background: var(--color-accent);
+}
+
+.admin-nav-link-active:hover {
+  color: var(--color-accent-ink);
+  background: var(--color-accent-hover);
+}
+
 /* Leads list */
 .admin-leads-toolbar {
   display: flex;

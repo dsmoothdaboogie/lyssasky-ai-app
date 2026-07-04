@@ -3,6 +3,9 @@ import { Button } from '../components/Button';
 import { LoginPage } from './LoginPage';
 import { LeadsListPage } from './LeadsListPage';
 import { LeadCardPage } from './LeadCardPage';
+import { StylesListPage } from './StylesListPage';
+import { StyleEditPage } from './StyleEditPage';
+import { AdminNav } from './AdminNav';
 import { useAdminAuth } from './useAdminAuth';
 
 /**
@@ -59,11 +62,15 @@ export function AdminApp() {
           Sign out
         </Button>
       </header>
+      <AdminNav />
       <main className="admin-main">
         <Routes>
           <Route index element={<Navigate to="leads" replace />} />
           <Route path="leads" element={<LeadsListPage />} />
           <Route path="leads/:id" element={<LeadCardPage />} />
+          <Route path="styles" element={<StylesListPage />} />
+          <Route path="styles/new" element={<StyleEditPage />} />
+          <Route path="styles/:slug" element={<StyleEditPage />} />
         </Routes>
       </main>
     </div>
