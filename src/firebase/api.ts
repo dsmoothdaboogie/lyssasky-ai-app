@@ -8,6 +8,7 @@ import type {
   Lead,
   QuestionnaireAnswers,
   Style,
+  StyleRecipe,
 } from '../domain/types';
 import { DEFAULT_CONFIG } from '../config/defaultConfig';
 
@@ -202,4 +203,29 @@ export async function fetchAllStyles(): Promise<Style[]> {
 export async function uploadAdminImage(path: string, file: File): Promise<string> {
   await uploadBytes(ref(storage, path), file);
   return path;
+}
+
+export interface AdminTestBenchGenerateInput {
+  inputPhotoPath: string;
+  styleSlug?: string;
+  inlineRecipe?: StyleRecipe;
+  styleName?: string;
+  answers?: Partial<QuestionnaireAnswers>;
+}
+
+/**
+ * Wraps the `adminTestBenchGenerate` callable (functions/src/admin/testbench.ts).
+ * Either `styleSlug` (spot-check a published style) or both `inlineRecipe` and
+ * `styleName` (try an unsaved recipe tweak) must be supplied — the callable
+ * validates this server-side and throws `invalid-argument` otherwise.
+ */
+export async function apiAdminTestBenchGenerate(
+  input: AdminTestBenchGenerateInput
+): Promise<{ generationId: string; outputPhotoPath: string }> {
+  const fn = httpsCallable<
+    AdminTestBenchGenerateInput,
+    { generationId: string; outputPhotoPath: string }
+  >(functions, 'adminTestBenchGenerate');
+  const res = await fn(input);
+  return res.data;
 }

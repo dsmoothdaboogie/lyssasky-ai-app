@@ -5,6 +5,7 @@ import { LeadsListPage } from './LeadsListPage';
 import { LeadCardPage } from './LeadCardPage';
 import { StylesListPage } from './StylesListPage';
 import { StyleEditPage } from './StyleEditPage';
+import { TestBenchPage } from './TestBenchPage';
 import { AdminNav } from './AdminNav';
 import { useAdminAuth } from './useAdminAuth';
 
@@ -71,6 +72,7 @@ export function AdminApp() {
           <Route path="styles" element={<StylesListPage />} />
           <Route path="styles/new" element={<StyleEditPage />} />
           <Route path="styles/:slug" element={<StyleEditPage />} />
+          <Route path="testbench" element={<TestBenchPage />} />
         </Routes>
       </main>
     </div>
