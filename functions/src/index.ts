@@ -7,4 +7,5 @@ export { logEvent } from './events';
 export { startCheckout, confirmPaymentMock } from './checkout';
 export { onLeadPaid } from './generation/runGeneration';
 export { adminSaveStyle, adminDeleteStyle } from './admin/styles';
+export { adminUpdateConfig } from './admin/config';
 export { adminTestBenchGenerate } from './admin/testbench';
