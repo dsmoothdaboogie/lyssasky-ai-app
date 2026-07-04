@@ -7,6 +7,7 @@ import { StylesListPage } from './StylesListPage';
 import { StyleEditPage } from './StyleEditPage';
 import { TestBenchPage } from './TestBenchPage';
 import { ConfigPage } from './ConfigPage';
+import { AnalyticsPage } from './AnalyticsPage';
 import { AdminNav } from './AdminNav';
 import { useAdminAuth } from './useAdminAuth';
 
@@ -75,6 +76,7 @@ export function AdminApp() {
           <Route path="styles/:slug" element={<StyleEditPage />} />
           <Route path="testbench" element={<TestBenchPage />} />
           <Route path="config" element={<ConfigPage />} />
+          <Route path="analytics" element={<AnalyticsPage />} />
         </Routes>
       </main>
     </div>

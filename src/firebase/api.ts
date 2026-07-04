@@ -4,6 +4,7 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { db, functions, storage } from './client';
 import type {
   AnalyticsEventType,
+  AnalyticsSummary,
   AppConfig,
   Lead,
   QuestionnaireAnswers,
@@ -209,6 +210,15 @@ export async function fetchAllStyles(): Promise<Style[]> {
 export async function apiAdminUpdateConfig(patch: Partial<AppConfig>): Promise<Ok> {
   const fn = httpsCallable<{ patch: Partial<AppConfig> }, Ok>(functions, 'adminUpdateConfig');
   return (await fn({ patch })).data;
+}
+
+/**
+ * Wraps the `adminGetAnalytics` callable (functions/src/admin/analytics.ts),
+ * which aggregates leads + generations into a funnel/revenue/style summary.
+ */
+export async function apiAdminGetAnalytics(): Promise<AnalyticsSummary> {
+  const fn = httpsCallable<void, AnalyticsSummary>(functions, 'adminGetAnalytics');
+  return (await fn()).data;
 }
 
 export async function uploadAdminImage(path: string, file: File): Promise<string> {
