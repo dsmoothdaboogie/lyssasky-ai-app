@@ -17,6 +17,8 @@ vi.mock('../firebase/api', () => ({
     calendlyUrl: 'https://calendly.com/lyssasky/consult',
     paymentMode: 'mock',
     generationMode: 'mock',
+    notifyEmail: 'marjorie@lyssasky.com',
+    featureFlags: {},
     questionnaire: [],
   }),
   apiLogEvent: vi.fn().mockResolvedValue({ ok: true }),

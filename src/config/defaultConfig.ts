@@ -6,6 +6,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   calendlyUrl: 'https://calendly.com/lyssasky/consult',
   paymentMode: 'mock',
   generationMode: 'mock',
+  notifyEmail: 'marjorie@lyssasky.com',
+  featureFlags: {},
   questionnaire: [
     {
       id: 'roomType', prompt: 'Which room are we restyling?', type: 'single', required: true,

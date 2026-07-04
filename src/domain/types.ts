@@ -40,6 +40,8 @@ export interface AppConfig {
   paymentMode: 'mock' | 'stripe';
   generationMode: 'mock' | 'gemini';
   questionnaire: QuestionDef[];
+  notifyEmail: string;
+  featureFlags: Record<string, boolean>;
 }
 
 export interface QuestionOption { value: string; label: string; imageUrl?: string; description?: string; }
@@ -99,4 +101,23 @@ export interface GenerationRecord {
   status: 'success' | 'failed';
   error?: string;
   createdAt: number;
+}
+
+export interface MailDocument {
+  to: string;
+  message: { subject: string; html: string };
+  createdAt: number;
+  kind: 'booking_notification' | 'result_ready';
+  leadId?: string;
+}
+
+export interface AnalyticsSummary {
+  funnel: Record<'captured' | 'paid' | 'generated' | 'rated' | 'booked' | 'failed', number>;
+  totalLeads: number;
+  stylePopularity: { slug: string; count: number }[];
+  avgRatingByStyle: { slug: string; avg: number; count: number }[];
+  budgetDistribution: Record<string, number>;
+  timelineDistribution: Record<string, number>;
+  revenueCents: number;
+  generations: { total: number; failed: number; avgDurationMs: number; estCostCents: number };
 }
