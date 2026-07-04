@@ -1,25 +1,14 @@
 import { randomUUID } from 'crypto';
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
-import { db, storage } from '../admin';
-import { loadConfig } from '../config';
+import { db } from '../admin';
 import { buildGenerationPrompt } from '../../../src/domain/prompt';
 import { assertTransition } from '../../../src/domain/leadStatus';
 import { logEventDoc } from '../events';
-import { createMockGenerationProvider } from './mockProvider';
-import { createGeminiGenerationProvider } from './geminiProvider';
+import { generateImage } from './generateImage';
 import type { GenerationProvider } from './provider';
 import type { Lead, Style, StyleRecipe, GenerationRecord } from '../../../src/domain/types';
 
-async function resolveProvider(): Promise<GenerationProvider> {
-  const cfg = await loadConfig();
-  if (cfg.generationMode === 'gemini' && process.env.GEMINI_API_KEY) {
-    return createGeminiGenerationProvider(process.env.GEMINI_API_KEY);
-  }
-  return createMockGenerationProvider();
-}
-
 export async function runGeneration(leadId: string, provider?: GenerationProvider) {
-  const gen = provider ?? (await resolveProvider());
   const ref = db.collection('leads').doc(leadId);
   const lead = (await ref.get()).data() as Lead | undefined;
   // Nothing to do if the lead doc itself doesn't exist.
@@ -53,31 +42,24 @@ export async function runGeneration(leadId: string, provider?: GenerationProvide
     promptSnapshot = prompt;
     await logEventDoc({ type: 'generation_started', leadId });
 
-    const bucket = storage.bucket();
-    const [photoBytes] = await bucket.file(lead.originalPhotoPath).download();
-    const start = Date.now();
-    let out; let lastErr: unknown;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try { out = await gen.generate({ photoBytes, mimeType: 'image/jpeg', prompt }); break; }
-      catch (e) { lastErr = e; }
-    }
-    const durationMs = Date.now() - start;
-
-    if (!out) throw new Error(String(lastErr));
+    const { outputPhotoPath, durationMs, costEstimate } = await generateImage({
+      inputPhotoPath: lead.originalPhotoPath,
+      prompt,
+      provider,
+      outputDir: `leads/${lead.ownerUid}/generated`,
+    });
 
     const genId = randomUUID();
-    const outputPath = `leads/${lead.ownerUid}/generated/${Date.now()}.png`;
-    await bucket.file(outputPath).save(out.imageBytes, { contentType: out.mimeType });
     await db.collection('generations').doc(genId).set(<GenerationRecord>{
       id: genId, leadId, source: 'funnel', styleSlug, recipeSnapshot,
-      promptSnapshot, inputPhotoPath: lead.originalPhotoPath, outputPhotoPath: outputPath,
-      durationMs, costEstimate: out.costEstimate, status: 'success', createdAt: Date.now(),
+      promptSnapshot, inputPhotoPath: lead.originalPhotoPath, outputPhotoPath,
+      durationMs, costEstimate, status: 'success', createdAt: Date.now(),
     });
     assertTransition(lead.status, 'generated');
     await ref.update({
       status: 'generated',
-      generatedImagePaths: [...lead.generatedImagePaths, outputPath],
-      costEstimateTotal: lead.costEstimateTotal + out.costEstimate,
+      generatedImagePaths: [...lead.generatedImagePaths, outputPhotoPath],
+      costEstimateTotal: lead.costEstimateTotal + costEstimate,
       'timestamps.generated': Date.now(), updatedAt: Date.now(),
     });
     await logEventDoc({ type: 'generation_completed', leadId, meta: { durationMs } });
