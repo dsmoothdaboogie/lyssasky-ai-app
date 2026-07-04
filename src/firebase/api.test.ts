@@ -13,5 +13,10 @@ describe('firebase api wrappers', () => {
     expect(typeof api.apiLogEvent).toBe('function');
     expect(typeof api.watchLead).toBe('function');
     expect(typeof api.uploadOriginalPhoto).toBe('function');
+    expect(typeof api.apiAdminSaveStyle).toBe('function');
+    expect(typeof api.apiAdminDeleteStyle).toBe('function');
+    expect(typeof api.fetchStyle).toBe('function');
+    expect(typeof api.fetchAllStyles).toBe('function');
+    expect(typeof api.uploadAdminImage).toBe('function');
   });
 });

@@ -178,3 +178,28 @@ export async function uploadOriginalPhoto(uid: string, leadId: string, file: Fil
   await uploadBytes(ref(storage, path), file);
   return path;
 }
+
+export async function apiAdminSaveStyle(style: Style): Promise<Ok> {
+  const fn = httpsCallable<{ style: Style }, Ok>(functions, 'adminSaveStyle');
+  return (await fn({ style })).data;
+}
+
+export async function apiAdminDeleteStyle(slug: string): Promise<Ok> {
+  const fn = httpsCallable<{ slug: string }, Ok>(functions, 'adminDeleteStyle');
+  return (await fn({ slug })).data;
+}
+
+export async function fetchStyle(slug: string): Promise<Style | undefined> {
+  const snap = await getDoc(doc(db, 'styles', slug));
+  return snap.exists() ? (snap.data() as Style) : undefined;
+}
+
+export async function fetchAllStyles(): Promise<Style[]> {
+  const snap = await getDocs(query(collection(db, 'styles'), orderBy('sortOrder')));
+  return snap.docs.map((d) => d.data() as Style);
+}
+
+export async function uploadAdminImage(path: string, file: File): Promise<string> {
+  await uploadBytes(ref(storage, path), file);
+  return path;
+}
