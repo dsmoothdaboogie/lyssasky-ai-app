@@ -90,6 +90,27 @@ describe('storage rules', () => {
     );
   });
 
+  it('forbids an admin uploading an oversized file to styles/**', async () => {
+    const admin = env.authenticatedContext('admin1', { admin: true }).storage();
+    await assertFails(
+      uploadBytes(ref(admin, 'styles/scandi/big.jpg'), new Uint8Array(11 * 1024 * 1024), { contentType: 'image/jpeg' })
+    );
+  });
+
+  it('forbids an admin uploading a non-image content-type to styles/**', async () => {
+    const admin = env.authenticatedContext('admin1', { admin: true }).storage();
+    await assertFails(
+      uploadBytes(ref(admin, 'styles/scandi/x.pdf'), new Uint8Array([1, 2, 3]), { contentType: 'application/pdf' })
+    );
+  });
+
+  it('forbids an admin uploading an oversized file to testbench/**', async () => {
+    const admin = env.authenticatedContext('admin1', { admin: true }).storage();
+    await assertFails(
+      uploadBytes(ref(admin, 'testbench/u/big.jpg'), new Uint8Array(16 * 1024 * 1024), { contentType: 'image/jpeg' })
+    );
+  });
+
   it('lets anyone read styles/** but only an admin read testbench/**', async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {
       await uploadBytes(ref(ctx.storage(), 'styles/scandi/g.jpg'), new Uint8Array([1, 2, 3]), {

@@ -74,4 +74,11 @@ describe('firestore rules', () => {
     const u1 = env.authenticatedContext('u1').firestore();
     await assertFails(u1.collection('mail').doc('m2').get());
   });
+
+  it('forbids writes to mail even for an admin', async () => {
+    const admin = env.authenticatedContext('admin1', { admin: true }).firestore();
+    await assertFails(
+      admin.collection('mail').doc('m1').set({ to: 'x@y.com', message: { subject: 's', html: 'h' } })
+    );
+  });
 });
