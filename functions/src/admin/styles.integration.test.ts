@@ -30,4 +30,16 @@ describe('admin styles', () => {
   it('rejects a style missing recipe fields', () => {
     expect(() => validateStyle({ ...style, recipe: { description: 'd' } })).toThrow(/recipe/i);
   });
+  it('rejects undefined input with an HttpsError, not a raw TypeError', () => {
+    expect(() => validateStyle(undefined)).toThrow(/style/i);
+    try {
+      validateStyle(undefined);
+      throw new Error('expected validateStyle to throw');
+    } catch (e) {
+      expect(e).not.toBeInstanceOf(TypeError);
+    }
+  });
+  it('rejects a style missing a name', () => {
+    expect(() => validateStyle({ ...style, name: '' })).toThrow(/name/i);
+  });
 });

@@ -9,6 +9,9 @@ function str(v: unknown, field: string): string {
   return v;
 }
 export function validateStyle(input: unknown): Style {
+  if (typeof input !== 'object' || input === null) {
+    throw new HttpsError('invalid-argument', 'Missing style');
+  }
   const s = input as Record<string, unknown>;
   const slug = str(s.slug, 'slug');
   if (!SLUG_RE.test(slug)) throw new HttpsError('invalid-argument', 'slug must be lowercase letters, numbers, underscores');
