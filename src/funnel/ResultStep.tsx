@@ -76,23 +76,22 @@ export function ResultStep() {
 
         if (tokenMode && token) {
           // Emailed cross-device link: this uid doesn't own the lead, so read
-          // via the token-authenticated callable instead of fetchLead. Only
-          // the generated image paths are returned (no before photo), and
-          // there's nothing to claim into funnel state — this view is
-          // read-only.
+          // via the token-authenticated callable instead of fetchLead. It
+          // returns already-resolved download URLs (resolved server-side
+          // with the Admin SDK, since this uid can't resolve
+          // `leads/{ownerUid}/generated/*` paths itself via getImageUrl) —
+          // no before photo, and nothing to claim into funnel state, since
+          // this view is read-only.
           const result = await apiGetResultByToken(leadId, token);
           if (cancelled || !mountedRef.current) return;
 
-          if (result.imagePaths.length === 0) {
+          if (result.imageUrls.length === 0) {
             setLoadError("We couldn't find your finished design just yet — please try again shortly.");
             setLoading(false);
             return;
           }
 
-          const newestPath = result.imagePaths[result.imagePaths.length - 1];
-          const url = await getImageUrl(newestPath);
-          if (cancelled || !mountedRef.current) return;
-          setAfterUrl(url);
+          setAfterUrl(result.imageUrls[result.imageUrls.length - 1]);
           setLoading(false);
           return;
         }

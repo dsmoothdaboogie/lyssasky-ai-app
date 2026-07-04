@@ -140,16 +140,18 @@ export async function apiLogEvent(
  * `leadToken` (mailed to the customer alongside the leadId) is the
  * credential, since a result link opened on a new device gets a fresh
  * anonymous uid that wouldn't otherwise satisfy the lead's ownership rule.
- * Returns Storage paths (not resolved URLs) — resolve each with
- * `getImageUrl`, same as every other image path in the app.
+ * Returns already-resolved download URLs (not Storage paths) — the callable
+ * resolves them server-side with the Admin SDK, since the fresh anonymous
+ * uid on a new device can't satisfy storage.rules to resolve them itself via
+ * `getImageUrl`.
  */
 export async function apiGetResultByToken(
   leadId: string,
   leadToken: string
-): Promise<{ status: LeadStatus; imagePaths: string[] }> {
+): Promise<{ status: LeadStatus; imageUrls: string[] }> {
   const fn = httpsCallable<
     { leadId: string; leadToken: string },
-    { status: LeadStatus; imagePaths: string[] }
+    { status: LeadStatus; imageUrls: string[] }
   >(functions, 'getResultByToken');
   const res = await fn({ leadId, leadToken });
   return res.data;

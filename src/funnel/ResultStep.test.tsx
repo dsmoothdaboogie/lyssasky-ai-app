@@ -137,10 +137,10 @@ describe('ResultStep', () => {
     expect(screen.queryByText('wait-screen:l1')).not.toBeInTheDocument();
   });
 
-  it('token mode: with ?lead= and ?token= both present, loads via apiGetResultByToken (not fetchLead)', async () => {
+  it('token mode: with ?lead= and ?token= both present, loads via apiGetResultByToken (not fetchLead) using the already-resolved URL', async () => {
     (apiGetResultByToken as ReturnType<typeof vi.fn>).mockResolvedValue({
       status: 'generated',
-      imagePaths: ['leads/u1/generated/1.png'],
+      imageUrls: ['http://x/img.png'],
     });
 
     renderResultStep('/result?lead=l1&token=t1');
@@ -149,9 +149,14 @@ describe('ResultStep', () => {
       expect(apiGetResultByToken).toHaveBeenCalledWith('l1', 't1')
     );
     expect(fetchLead).not.toHaveBeenCalled();
+    // Token mode renders the URL apiGetResultByToken already resolved
+    // server-side — it must NOT be re-resolved with getImageUrl (the client
+    // Storage SDK), since a fresh cross-device uid can't do that resolution
+    // itself.
+    expect(getImageUrl).not.toHaveBeenCalled();
 
     const img = await screen.findByAltText(/your new room|generated|after/i);
-    expect(img).toHaveAttribute('src', 'https://example.test/leads/u1/generated/1.png');
+    expect(img).toHaveAttribute('src', 'http://x/img.png');
 
     // The rating/regenerate controls are owner-guarded server-side, so the
     // read-only emailed-link view hides them rather than showing controls
