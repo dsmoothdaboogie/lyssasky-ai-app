@@ -62,4 +62,30 @@ describe('handleLeadBooked', () => {
   it('does nothing when the lead does not exist', async () => {
     await expect(handleLeadBooked('does-not-exist')).resolves.toBeUndefined();
   });
+
+  it('escapes HTML injected via customer-controlled fields', async () => {
+    const { leadId } = await createLeadDoc('owner-booked-injection');
+    const ref = db.collection('leads').doc(leadId);
+    await ref.update({
+      status: 'booked',
+      email: 'customer@example.com',
+      answers,
+      generatedImagePaths: ['leads/x/generated/1.png'],
+      rating: 4,
+      feedback: '<script>alert(1)</script>',
+      booking: { name: '<a href="http://evil">x</a>', phone: '555-1234', note: 'Prefer weekends' },
+      'timestamps.booked': Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    await handleLeadBooked(leadId);
+
+    const snap = await db.collection('mail').where('leadId', '==', leadId).get();
+    expect(snap.size).toBe(1);
+    const doc = snap.docs[0].data();
+    expect(doc.message.html).not.toContain('<script>alert(1)</script>');
+    expect(doc.message.html).not.toContain('<a href="http://evil">');
+    expect(doc.message.html).toContain('&lt;script&gt;');
+    expect(doc.message.html).toContain('&lt;a ');
+  });
 });

@@ -26,28 +26,47 @@ export async function sendEmailDoc(input: {
   });
 }
 
+/**
+ * Escapes HTML-significant characters in a value before it is interpolated
+ * into the booking notification email. All of the values rendered by
+ * `renderBookingHtml` originate from customer-controlled free text (lead
+ * email, questionnaire answers, feedback, booking details), and at go-live
+ * the Trigger Email extension sends this HTML as real mail — so without
+ * escaping, a customer could inject markup (e.g. `<a href="...">`,
+ * `<img onerror=...>`) into Marjorie's inbox.
+ */
+function escapeHtml(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  return String(v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function renderBookingHtml(leadId: string, lead: Lead): string {
   const appBaseUrl = process.env.APP_BASE_URL ?? 'http://localhost:5173';
   const leadUrl = `${appBaseUrl}/admin/leads/${leadId}`;
   const answersList = lead.answers
     ? Object.entries(lead.answers)
-        .map(([key, value]) => `<li><strong>${key}:</strong> ${value}</li>`)
+        .map(([key, value]) => `<li><strong>${escapeHtml(key)}:</strong> ${escapeHtml(value)}</li>`)
         .join('')
     : '<li>No questionnaire answers on file</li>';
   const booking = lead.booking;
 
   return `
-    <h2>New booking from ${lead.email ?? 'unknown customer'}</h2>
-    <p><strong>Customer email:</strong> ${lead.email ?? 'n/a'}</p>
+    <h2>New booking from ${lead.email ? escapeHtml(lead.email) : 'unknown customer'}</h2>
+    <p><strong>Customer email:</strong> ${lead.email ? escapeHtml(lead.email) : 'n/a'}</p>
     <h3>Questionnaire answers</h3>
     <ul>${answersList}</ul>
     <h3>Feedback on the design</h3>
-    <p><strong>Rating:</strong> ${lead.rating ?? 'n/a'}</p>
-    <p><strong>What would you change:</strong> ${lead.feedback ?? 'n/a'}</p>
+    <p><strong>Rating:</strong> ${lead.rating !== undefined && lead.rating !== null ? escapeHtml(lead.rating) : 'n/a'}</p>
+    <p><strong>What would you change:</strong> ${lead.feedback ? escapeHtml(lead.feedback) : 'n/a'}</p>
     <h3>Booking details</h3>
-    <p><strong>Name:</strong> ${booking?.name ?? 'n/a'}</p>
-    <p><strong>Phone:</strong> ${booking?.phone ?? 'n/a'}</p>
-    <p><strong>Note:</strong> ${booking?.note ?? 'n/a'}</p>
+    <p><strong>Name:</strong> ${booking?.name ? escapeHtml(booking.name) : 'n/a'}</p>
+    <p><strong>Phone:</strong> ${booking?.phone ? escapeHtml(booking.phone) : 'n/a'}</p>
+    <p><strong>Note:</strong> ${booking?.note ? escapeHtml(booking.note) : 'n/a'}</p>
     <p><a href="${leadUrl}">${leadUrl}</a></p>
   `.trim();
 }
