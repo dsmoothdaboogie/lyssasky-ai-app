@@ -62,4 +62,69 @@ describe('storage rules', () => {
     const admin = env.authenticatedContext('admin1', { admin: true }).storage();
     await assertSucceeds(getBytes(ref(admin, 'leads/u1/photo.jpg')));
   });
+
+  it('lets an admin upload to styles/** and testbench/**', async () => {
+    const admin = env.authenticatedContext('admin1', { admin: true }).storage();
+    await assertSucceeds(
+      uploadBytes(ref(admin, 'styles/scandi/g.jpg'), new Uint8Array([1, 2, 3]), { contentType: 'image/jpeg' })
+    );
+    await assertSucceeds(
+      uploadBytes(ref(admin, 'testbench/u/x.jpg'), new Uint8Array([1, 2, 3]), { contentType: 'image/jpeg' })
+    );
+  });
+
+  it('forbids a non-admin (and anon) customer from writing to styles/** or testbench/**', async () => {
+    const u1 = env.authenticatedContext('u1').storage();
+    const anon = env.unauthenticatedContext().storage();
+    await assertFails(
+      uploadBytes(ref(u1, 'styles/scandi/g.jpg'), new Uint8Array([1, 2, 3]), { contentType: 'image/jpeg' })
+    );
+    await assertFails(
+      uploadBytes(ref(anon, 'styles/scandi/g.jpg'), new Uint8Array([1, 2, 3]), { contentType: 'image/jpeg' })
+    );
+    await assertFails(
+      uploadBytes(ref(u1, 'testbench/u/x.jpg'), new Uint8Array([1, 2, 3]), { contentType: 'image/jpeg' })
+    );
+    await assertFails(
+      uploadBytes(ref(anon, 'testbench/u/x.jpg'), new Uint8Array([1, 2, 3]), { contentType: 'image/jpeg' })
+    );
+  });
+
+  it('forbids an admin uploading an oversized file to styles/**', async () => {
+    const admin = env.authenticatedContext('admin1', { admin: true }).storage();
+    await assertFails(
+      uploadBytes(ref(admin, 'styles/scandi/big.jpg'), new Uint8Array(11 * 1024 * 1024), { contentType: 'image/jpeg' })
+    );
+  });
+
+  it('forbids an admin uploading a non-image content-type to styles/**', async () => {
+    const admin = env.authenticatedContext('admin1', { admin: true }).storage();
+    await assertFails(
+      uploadBytes(ref(admin, 'styles/scandi/x.pdf'), new Uint8Array([1, 2, 3]), { contentType: 'application/pdf' })
+    );
+  });
+
+  it('forbids an admin uploading an oversized file to testbench/**', async () => {
+    const admin = env.authenticatedContext('admin1', { admin: true }).storage();
+    await assertFails(
+      uploadBytes(ref(admin, 'testbench/u/big.jpg'), new Uint8Array(16 * 1024 * 1024), { contentType: 'image/jpeg' })
+    );
+  });
+
+  it('lets anyone read styles/** but only an admin read testbench/**', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await uploadBytes(ref(ctx.storage(), 'styles/scandi/g.jpg'), new Uint8Array([1, 2, 3]), {
+        contentType: 'image/jpeg',
+      });
+      await uploadBytes(ref(ctx.storage(), 'testbench/u/x.jpg'), new Uint8Array([1, 2, 3]), {
+        contentType: 'image/jpeg',
+      });
+    });
+    const anon = env.unauthenticatedContext().storage();
+    const u1 = env.authenticatedContext('u1').storage();
+    const admin = env.authenticatedContext('admin1', { admin: true }).storage();
+    await assertSucceeds(getBytes(ref(anon, 'styles/scandi/g.jpg')));
+    await assertFails(getBytes(ref(u1, 'testbench/u/x.jpg')));
+    await assertSucceeds(getBytes(ref(admin, 'testbench/u/x.jpg')));
+  });
 });

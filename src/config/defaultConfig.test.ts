@@ -21,4 +21,9 @@ describe('DEFAULT_CONFIG', () => {
     const style = DEFAULT_CONFIG.questionnaire.find(q => q.id === 'styleSlug')!;
     expect(style.type).toBe('gallery');
   });
+  it('provides a notify email and a feature flags map', () => {
+    expect(typeof DEFAULT_CONFIG.notifyEmail).toBe('string');
+    expect(DEFAULT_CONFIG.notifyEmail).toMatch(/@/);
+    expect(DEFAULT_CONFIG.featureFlags).toBeTypeOf('object');
+  });
 });

@@ -4,10 +4,13 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { db, functions, storage } from './client';
 import type {
   AnalyticsEventType,
+  AnalyticsSummary,
   AppConfig,
   Lead,
+  LeadStatus,
   QuestionnaireAnswers,
   Style,
+  StyleRecipe,
 } from '../domain/types';
 import { DEFAULT_CONFIG } from '../config/defaultConfig';
 
@@ -131,6 +134,29 @@ export async function apiLogEvent(
   }
 }
 
+/**
+ * Wraps the `getResultByToken` callable (functions/src/result.ts) — the
+ * cross-device "emailed link" read path. Requires no auth: the opaque
+ * `leadToken` (mailed to the customer alongside the leadId) is the
+ * credential, since a result link opened on a new device gets a fresh
+ * anonymous uid that wouldn't otherwise satisfy the lead's ownership rule.
+ * Returns already-resolved download URLs (not Storage paths) — the callable
+ * resolves them server-side with the Admin SDK, since the fresh anonymous
+ * uid on a new device can't satisfy storage.rules to resolve them itself via
+ * `getImageUrl`.
+ */
+export async function apiGetResultByToken(
+  leadId: string,
+  leadToken: string
+): Promise<{ status: LeadStatus; imageUrls: string[] }> {
+  const fn = httpsCallable<
+    { leadId: string; leadToken: string },
+    { status: LeadStatus; imageUrls: string[] }
+  >(functions, 'getResultByToken');
+  const res = await fn({ leadId, leadToken });
+  return res.data;
+}
+
 export function watchLead(leadId: string, cb: (lead: Lead | undefined) => void): () => void {
   return onSnapshot(doc(db, 'leads', leadId), (snap) => {
     cb(snap.exists() ? (snap.data() as Lead) : undefined);
@@ -177,4 +203,74 @@ export async function uploadOriginalPhoto(uid: string, leadId: string, file: Fil
   const path = `leads/${uid}/${leadId}/original.${ext}`;
   await uploadBytes(ref(storage, path), file);
   return path;
+}
+
+export async function apiAdminSaveStyle(style: Style): Promise<Ok> {
+  const fn = httpsCallable<{ style: Style }, Ok>(functions, 'adminSaveStyle');
+  return (await fn({ style })).data;
+}
+
+export async function apiAdminDeleteStyle(slug: string): Promise<Ok> {
+  const fn = httpsCallable<{ slug: string }, Ok>(functions, 'adminDeleteStyle');
+  return (await fn({ slug })).data;
+}
+
+export async function fetchStyle(slug: string): Promise<Style | undefined> {
+  const snap = await getDoc(doc(db, 'styles', slug));
+  return snap.exists() ? (snap.data() as Style) : undefined;
+}
+
+export async function fetchAllStyles(): Promise<Style[]> {
+  const snap = await getDocs(query(collection(db, 'styles'), orderBy('sortOrder')));
+  return snap.docs.map((d) => d.data() as Style);
+}
+
+/**
+ * Wraps the `adminUpdateConfig` callable (functions/src/admin/config.ts).
+ * The callable merges `patch` onto the existing `config/app` doc (creating it
+ * from DEFAULT_CONFIG if missing) after server-side validation, so callers
+ * only need to send the fields that changed.
+ */
+export async function apiAdminUpdateConfig(patch: Partial<AppConfig>): Promise<Ok> {
+  const fn = httpsCallable<{ patch: Partial<AppConfig> }, Ok>(functions, 'adminUpdateConfig');
+  return (await fn({ patch })).data;
+}
+
+/**
+ * Wraps the `adminGetAnalytics` callable (functions/src/admin/analytics.ts),
+ * which aggregates leads + generations into a funnel/revenue/style summary.
+ */
+export async function apiAdminGetAnalytics(): Promise<AnalyticsSummary> {
+  const fn = httpsCallable<void, AnalyticsSummary>(functions, 'adminGetAnalytics');
+  return (await fn()).data;
+}
+
+export async function uploadAdminImage(path: string, file: File): Promise<string> {
+  await uploadBytes(ref(storage, path), file);
+  return path;
+}
+
+export interface AdminTestBenchGenerateInput {
+  inputPhotoPath: string;
+  styleSlug?: string;
+  inlineRecipe?: StyleRecipe;
+  styleName?: string;
+  answers?: Partial<QuestionnaireAnswers>;
+}
+
+/**
+ * Wraps the `adminTestBenchGenerate` callable (functions/src/admin/testbench.ts).
+ * Either `styleSlug` (spot-check a published style) or both `inlineRecipe` and
+ * `styleName` (try an unsaved recipe tweak) must be supplied — the callable
+ * validates this server-side and throws `invalid-argument` otherwise.
+ */
+export async function apiAdminTestBenchGenerate(
+  input: AdminTestBenchGenerateInput
+): Promise<{ generationId: string; outputPhotoPath: string }> {
+  const fn = httpsCallable<
+    AdminTestBenchGenerateInput,
+    { generationId: string; outputPhotoPath: string }
+  >(functions, 'adminTestBenchGenerate');
+  const res = await fn(input);
+  return res.data;
 }

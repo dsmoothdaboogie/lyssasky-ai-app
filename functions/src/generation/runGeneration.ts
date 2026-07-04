@@ -1,25 +1,50 @@
 import { randomUUID } from 'crypto';
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
-import { db, storage } from '../admin';
-import { loadConfig } from '../config';
+import { db } from '../admin';
 import { buildGenerationPrompt } from '../../../src/domain/prompt';
 import { assertTransition } from '../../../src/domain/leadStatus';
 import { logEventDoc } from '../events';
-import { createMockGenerationProvider } from './mockProvider';
-import { createGeminiGenerationProvider } from './geminiProvider';
+import { sendEmailDoc, escapeHtml } from '../email/sendEmail';
+import { generateImage } from './generateImage';
 import type { GenerationProvider } from './provider';
 import type { Lead, Style, StyleRecipe, GenerationRecord } from '../../../src/domain/types';
 
-async function resolveProvider(): Promise<GenerationProvider> {
-  const cfg = await loadConfig();
-  if (cfg.generationMode === 'gemini' && process.env.GEMINI_API_KEY) {
-    return createGeminiGenerationProvider(process.env.GEMINI_API_KEY);
+/**
+ * Best-effort "your room preview is ready" email to the customer, fired once
+ * a funnel-sourced generation succeeds and the lead has an email on file
+ * (captured earlier in the questionnaire step — a lead reached via the
+ * test-bench never has one). The link carries the lead's opaque `leadToken`
+ * so it works from a brand-new device/browser where a fresh anonymous auth
+ * uid wouldn't otherwise satisfy the lead's ownership check (see
+ * `getResultByTokenDoc` in `../result.ts`).
+ *
+ * Wrapped in its own try/catch — separate from the outer runGeneration
+ * try/catch — so a mail-composition failure can never be mistaken for a
+ * generation failure and flip an already-succeeded lead to 'failed'.
+ */
+async function sendResultReadyEmail(leadId: string, lead: Lead): Promise<void> {
+  if (!lead.email) return;
+  try {
+    const appBaseUrl = process.env.APP_BASE_URL ?? 'http://localhost:5173';
+    const resultUrl = `${appBaseUrl}/result?lead=${encodeURIComponent(leadId)}&token=${encodeURIComponent(lead.leadToken)}`;
+    const html = `
+      <h2>Your room preview is ready! ✨</h2>
+      <p>Marjorie's AI stylist has finished reimagining your space. Take a look:</p>
+      <p><a href="${resultUrl}">${escapeHtml(resultUrl)}</a></p>
+    `.trim();
+    await sendEmailDoc({
+      to: lead.email,
+      subject: 'Your room preview is ready ✨',
+      html,
+      kind: 'result_ready',
+      leadId,
+    });
+  } catch (err) {
+    console.error(`runGeneration: failed to send result-ready email for lead ${leadId}`, err);
   }
-  return createMockGenerationProvider();
 }
 
 export async function runGeneration(leadId: string, provider?: GenerationProvider) {
-  const gen = provider ?? (await resolveProvider());
   const ref = db.collection('leads').doc(leadId);
   const lead = (await ref.get()).data() as Lead | undefined;
   // Nothing to do if the lead doc itself doesn't exist.
@@ -53,34 +78,28 @@ export async function runGeneration(leadId: string, provider?: GenerationProvide
     promptSnapshot = prompt;
     await logEventDoc({ type: 'generation_started', leadId });
 
-    const bucket = storage.bucket();
-    const [photoBytes] = await bucket.file(lead.originalPhotoPath).download();
-    const start = Date.now();
-    let out; let lastErr: unknown;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try { out = await gen.generate({ photoBytes, mimeType: 'image/jpeg', prompt }); break; }
-      catch (e) { lastErr = e; }
-    }
-    const durationMs = Date.now() - start;
-
-    if (!out) throw new Error(String(lastErr));
+    const { outputPhotoPath, durationMs, costEstimate } = await generateImage({
+      inputPhotoPath: lead.originalPhotoPath,
+      prompt,
+      provider,
+      outputDir: `leads/${lead.ownerUid}/generated`,
+    });
 
     const genId = randomUUID();
-    const outputPath = `leads/${lead.ownerUid}/generated/${Date.now()}.png`;
-    await bucket.file(outputPath).save(out.imageBytes, { contentType: out.mimeType });
     await db.collection('generations').doc(genId).set(<GenerationRecord>{
       id: genId, leadId, source: 'funnel', styleSlug, recipeSnapshot,
-      promptSnapshot, inputPhotoPath: lead.originalPhotoPath, outputPhotoPath: outputPath,
-      durationMs, costEstimate: out.costEstimate, status: 'success', createdAt: Date.now(),
+      promptSnapshot, inputPhotoPath: lead.originalPhotoPath, outputPhotoPath,
+      durationMs, costEstimate, status: 'success', createdAt: Date.now(),
     });
     assertTransition(lead.status, 'generated');
     await ref.update({
       status: 'generated',
-      generatedImagePaths: [...lead.generatedImagePaths, outputPath],
-      costEstimateTotal: lead.costEstimateTotal + out.costEstimate,
+      generatedImagePaths: [...lead.generatedImagePaths, outputPhotoPath],
+      costEstimateTotal: lead.costEstimateTotal + costEstimate,
       'timestamps.generated': Date.now(), updatedAt: Date.now(),
     });
     await logEventDoc({ type: 'generation_completed', leadId, meta: { durationMs } });
+    await sendResultReadyEmail(leadId, lead);
   } catch (err) {
     // Route ANY failure above to the same terminal state. We deliberately
     // do NOT call assertTransition here: if the lead's current status is

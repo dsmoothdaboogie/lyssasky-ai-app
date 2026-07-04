@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route, useSearchParams } from 'react-router-dom';
 import { FunnelProvider } from './useFunnelState';
 import { ResultStep } from './ResultStep';
-import { fetchLead, getImageUrl, apiSubmitFeedback, apiRegenerate } from '../firebase/api';
+import { fetchLead, getImageUrl, apiSubmitFeedback, apiRegenerate, apiGetResultByToken } from '../firebase/api';
 import { ensureAnonymousAuth } from '../firebase/client';
 import type { Lead } from '../domain/types';
 
@@ -12,6 +12,7 @@ vi.mock('../firebase/api', () => ({
   getImageUrl: vi.fn(),
   apiSubmitFeedback: vi.fn().mockResolvedValue({ ok: true }),
   apiRegenerate: vi.fn().mockResolvedValue({ ok: true }),
+  apiGetResultByToken: vi.fn(),
 }));
 
 vi.mock('../firebase/client', () => ({
@@ -134,5 +135,37 @@ describe('ResultStep', () => {
       ).not.toBeInTheDocument()
     );
     expect(screen.queryByText('wait-screen:l1')).not.toBeInTheDocument();
+  });
+
+  it('token mode: with ?lead= and ?token= both present, loads via apiGetResultByToken (not fetchLead) using the already-resolved URL', async () => {
+    (apiGetResultByToken as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: 'generated',
+      imageUrls: ['http://x/img.png'],
+    });
+
+    renderResultStep('/result?lead=l1&token=t1');
+
+    await waitFor(() =>
+      expect(apiGetResultByToken).toHaveBeenCalledWith('l1', 't1')
+    );
+    expect(fetchLead).not.toHaveBeenCalled();
+    // Token mode renders the URL apiGetResultByToken already resolved
+    // server-side — it must NOT be re-resolved with getImageUrl (the client
+    // Storage SDK), since a fresh cross-device uid can't do that resolution
+    // itself.
+    expect(getImageUrl).not.toHaveBeenCalled();
+
+    const img = await screen.findByAltText(/your new room|generated|after/i);
+    expect(img).toHaveAttribute('src', 'http://x/img.png');
+
+    // The rating/regenerate controls are owner-guarded server-side, so the
+    // read-only emailed-link view hides them rather than showing controls
+    // that would just fail.
+    expect(
+      screen.queryByRole('group', { name: /how close is this to your vision/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /try another version/i })
+    ).not.toBeInTheDocument();
   });
 });
