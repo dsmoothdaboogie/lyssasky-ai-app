@@ -7,6 +7,7 @@ import type {
   AnalyticsSummary,
   AppConfig,
   Lead,
+  LeadStatus,
   QuestionnaireAnswers,
   Style,
   StyleRecipe,
@@ -131,6 +132,27 @@ export async function apiLogEvent(
   } catch {
     // swallow — event logging is non-critical
   }
+}
+
+/**
+ * Wraps the `getResultByToken` callable (functions/src/result.ts) — the
+ * cross-device "emailed link" read path. Requires no auth: the opaque
+ * `leadToken` (mailed to the customer alongside the leadId) is the
+ * credential, since a result link opened on a new device gets a fresh
+ * anonymous uid that wouldn't otherwise satisfy the lead's ownership rule.
+ * Returns Storage paths (not resolved URLs) — resolve each with
+ * `getImageUrl`, same as every other image path in the app.
+ */
+export async function apiGetResultByToken(
+  leadId: string,
+  leadToken: string
+): Promise<{ status: LeadStatus; imagePaths: string[] }> {
+  const fn = httpsCallable<
+    { leadId: string; leadToken: string },
+    { status: LeadStatus; imagePaths: string[] }
+  >(functions, 'getResultByToken');
+  const res = await fn({ leadId, leadToken });
+  return res.data;
 }
 
 export function watchLead(leadId: string, cb: (lead: Lead | undefined) => void): () => void {

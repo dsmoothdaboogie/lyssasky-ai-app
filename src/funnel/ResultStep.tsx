@@ -3,18 +3,31 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FunnelLayout } from './FunnelLayout';
 import { Button } from '../components/Button';
 import { useFunnelState } from './useFunnelState';
-import { fetchLead, getImageUrl, apiSubmitFeedback, apiRegenerate } from '../firebase/api';
+import { fetchLead, getImageUrl, apiSubmitFeedback, apiRegenerate, apiGetResultByToken } from '../firebase/api';
 import { ensureAnonymousAuth } from '../firebase/client';
 
 const GENERIC_ERROR = "Something went wrong on our end — please try again in a moment.";
 const RATINGS = [1, 2, 3, 4, 5];
 
 /**
- * Reached from WaitScreen once generation finishes (in-memory funnel state
- * intact), or directly via a `?lead=` link after a reload — so `leadId` is
- * resolved from `useFunnelState()` first, falling back to the query param,
- * same pattern as WaitScreen. Generation is already done by this point, so
- * a one-shot `fetchLead` is enough (no need for the realtime `watchLead`
+ * Reached three ways:
+ *  1. From WaitScreen once generation finishes (in-memory funnel state
+ *     intact) — `leadId` comes from `useFunnelState()`.
+ *  2. Directly via a `?lead=` link after a reload on the SAME device/session
+ *     — falls back to the query param, same pattern as WaitScreen, and reads
+ *     the lead with `fetchLead` (Firestore rules allow the owning
+ *     `ownerUid`).
+ *  3. The emailed cross-device link, `?lead=...&token=...` — opened on a
+ *     brand-new device, this anonymous uid is NOT the lead's owner (it's a
+ *     fresh uid), so `fetchLead` would be denied by firestore.rules. Instead
+ *     this reads via the public `getResultByToken` callable, which trusts
+ *     the opaque `leadToken` as the credential. Since this path can't prove
+ *     ownership, it's read-only: rating/feedback/regenerate are all
+ *     owner-guarded callables server-side, so those controls are hidden here
+ *     rather than shown and left to fail.
+ *
+ * Generation is already done by the time this page loads, so a one-shot
+ * fetch is enough in every case (no need for the realtime `watchLead`
  * subscription WaitScreen uses).
  */
 export function ResultStep() {
@@ -23,7 +36,12 @@ export function ResultStep() {
     useFunnelState();
   const navigate = useNavigate();
 
-  const leadId = stateLeadId ?? searchParams.get('lead');
+  const urlLeadId = searchParams.get('lead');
+  const token = searchParams.get('token');
+  const tokenMode = Boolean(urlLeadId && token);
+  const owned = !tokenMode;
+
+  const leadId = stateLeadId ?? urlLeadId;
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -55,6 +73,30 @@ export function ResultStep() {
     (async () => {
       try {
         await ensureAnonymousAuth();
+
+        if (tokenMode && token) {
+          // Emailed cross-device link: this uid doesn't own the lead, so read
+          // via the token-authenticated callable instead of fetchLead. Only
+          // the generated image paths are returned (no before photo), and
+          // there's nothing to claim into funnel state — this view is
+          // read-only.
+          const result = await apiGetResultByToken(leadId, token);
+          if (cancelled || !mountedRef.current) return;
+
+          if (result.imagePaths.length === 0) {
+            setLoadError("We couldn't find your finished design just yet — please try again shortly.");
+            setLoading(false);
+            return;
+          }
+
+          const newestPath = result.imagePaths[result.imagePaths.length - 1];
+          const url = await getImageUrl(newestPath);
+          if (cancelled || !mountedRef.current) return;
+          setAfterUrl(url);
+          setLoading(false);
+          return;
+        }
+
         const lead = await fetchLead(leadId);
         if (cancelled || !mountedRef.current) return;
 
@@ -92,7 +134,7 @@ export function ResultStep() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leadId]);
+  }, [leadId, tokenMode, token]);
 
   if (!leadId) {
     return (
@@ -214,75 +256,86 @@ export function ResultStep() {
           />
         )}
 
-        <h2>How close is this to your vision?</h2>
-        <div
-          role="group"
-          aria-label="How close is this to your vision?"
-          style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}
-        >
-          {RATINGS.map((n) => (
-            <button
-              key={n}
-              type="button"
-              className={`btn ${rating === n ? 'btn-primary' : 'btn-secondary'}`}
-              aria-pressed={rating === n}
-              onClick={() => setRating(n)}
+        {owned && (
+          <>
+            <h2>How close is this to your vision?</h2>
+            <div
+              role="group"
+              aria-label="How close is this to your vision?"
+              style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}
             >
-              {n}
-            </button>
-          ))}
-        </div>
+              {RATINGS.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className={`btn ${rating === n ? 'btn-primary' : 'btn-secondary'}`}
+                  aria-pressed={rating === n}
+                  onClick={() => setRating(n)}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
 
-        <label htmlFor="result-feedback">
-          <h2>What would you change?</h2>
-        </label>
-        <textarea
-          id="result-feedback"
-          rows={3}
-          value={feedback}
-          onChange={(e) => setFeedback(e.target.value)}
-          placeholder="Optional — tell us what you'd tweak"
-          aria-label="What would you change?"
-        />
+            <label htmlFor="result-feedback">
+              <h2>What would you change?</h2>
+            </label>
+            <textarea
+              id="result-feedback"
+              rows={3}
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              placeholder="Optional — tell us what you'd tweak"
+              aria-label="What would you change?"
+            />
 
-        {submitError && (
-          <p role="alert" style={{ marginTop: 'var(--space-3)' }}>
-            {submitError}
-          </p>
-        )}
-
-        <Button
-          onClick={handleSubmit}
-          disabled={rating === null || submitting}
-          style={{ marginTop: 'var(--space-4)', width: '100%' }}
-        >
-          {submitting ? 'Submitting…' : 'Continue'}
-        </Button>
-
-        {!regenerateUsed && (
-          <div style={{ marginTop: 'var(--space-5)', textAlign: 'center' }}>
-            <p className="text-muted" style={{ marginBottom: 'var(--space-2)' }}>
-              Not quite right? You get one free re-generate.
-            </p>
-            <Button
-              variant="secondary"
-              onClick={handleRegenerate}
-              disabled={regenerating}
-              style={{ width: '100%' }}
-            >
-              {regenerating ? 'Starting over…' : 'Try another version'}
-            </Button>
-            {regenerateError && (
+            {submitError && (
               <p role="alert" style={{ marginTop: 'var(--space-3)' }}>
-                {regenerateError}
+                {submitError}
               </p>
             )}
-          </div>
+
+            <Button
+              onClick={handleSubmit}
+              disabled={rating === null || submitting}
+              style={{ marginTop: 'var(--space-4)', width: '100%' }}
+            >
+              {submitting ? 'Submitting…' : 'Continue'}
+            </Button>
+
+            {!regenerateUsed && (
+              <div style={{ marginTop: 'var(--space-5)', textAlign: 'center' }}>
+                <p className="text-muted" style={{ marginBottom: 'var(--space-2)' }}>
+                  Not quite right? You get one free re-generate.
+                </p>
+                <Button
+                  variant="secondary"
+                  onClick={handleRegenerate}
+                  disabled={regenerating}
+                  style={{ width: '100%' }}
+                >
+                  {regenerating ? 'Starting over…' : 'Try another version'}
+                </Button>
+                {regenerateError && (
+                  <p role="alert" style={{ marginTop: 'var(--space-3)' }}>
+                    {regenerateError}
+                  </p>
+                )}
+              </div>
+            )}
+            {regenerateUsed && (
+              <p className="text-muted" style={{ marginTop: 'var(--space-5)', textAlign: 'center' }}>
+                You've used your free re-generate — Marjorie can refine things further after you
+                connect.
+              </p>
+            )}
+          </>
         )}
-        {regenerateUsed && (
+
+        {!owned && (
           <p className="text-muted" style={{ marginTop: 'var(--space-5)', textAlign: 'center' }}>
-            You've used your free re-generate — Marjorie can refine things further after you
-            connect.
+            This is your emailed preview link — open it on the device you started on to rate it
+            or book a consult.
           </p>
         )}
       </section>

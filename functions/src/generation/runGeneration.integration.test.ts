@@ -135,3 +135,49 @@ describe('handleLeadPaid (onLeadPaid idempotency guard)', () => {
     expect(lead.generatedImagePaths).toHaveLength(1);
   });
 });
+
+describe('runGeneration result-ready email', () => {
+  it('sends a result_ready email to the lead when an email is on file', async () => {
+    await seedStyle();
+    const ref = db.collection('leads').doc();
+    await ref.set({
+      id: ref.id, ownerUid: 'u6', leadToken: 'tok6', status: 'paid',
+      email: 'customer@example.com',
+      answers: { roomType: 'living_room', styleSlug: 'scandi', colorMood: 'warm_cozy', budget: '1k_5k', timeline: 'asap' },
+      originalPhotoPath: 'leads/u6/original.jpg',
+      generatedImagePaths: [], costEstimateTotal: 0, timestamps: {}, createdAt: 0, updatedAt: 0,
+    });
+    await seedOriginalPhoto('leads/u6/original.jpg');
+
+    await runGeneration(ref.id, createMockGenerationProvider());
+
+    const lead = (await ref.get()).data()!;
+    expect(lead.status).toBe('generated');
+
+    const snap = await db.collection('mail').where('leadId', '==', ref.id).get();
+    expect(snap.size).toBe(1);
+    const doc = snap.docs[0].data();
+    expect(doc.to).toBe('customer@example.com');
+    expect(doc.kind).toBe('result_ready');
+    expect(doc.message.subject).toMatch(/room preview is ready/i);
+    expect(doc.message.html).toContain(ref.id);
+    expect(doc.message.html).toContain('tok6');
+  });
+
+  it('does not send an email when the lead has no email on file', async () => {
+    await seedStyle();
+    const ref = db.collection('leads').doc();
+    await ref.set({
+      id: ref.id, ownerUid: 'u7', leadToken: 'tok7', status: 'paid',
+      answers: { roomType: 'living_room', styleSlug: 'scandi', colorMood: 'warm_cozy', budget: '1k_5k', timeline: 'asap' },
+      originalPhotoPath: 'leads/u7/original.jpg',
+      generatedImagePaths: [], costEstimateTotal: 0, timestamps: {}, createdAt: 0, updatedAt: 0,
+    });
+    await seedOriginalPhoto('leads/u7/original.jpg');
+
+    await runGeneration(ref.id, createMockGenerationProvider());
+
+    const snap = await db.collection('mail').where('leadId', '==', ref.id).get();
+    expect(snap.size).toBe(0);
+  });
+});

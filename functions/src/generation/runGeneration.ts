@@ -4,9 +4,45 @@ import { db } from '../admin';
 import { buildGenerationPrompt } from '../../../src/domain/prompt';
 import { assertTransition } from '../../../src/domain/leadStatus';
 import { logEventDoc } from '../events';
+import { sendEmailDoc, escapeHtml } from '../email/sendEmail';
 import { generateImage } from './generateImage';
 import type { GenerationProvider } from './provider';
 import type { Lead, Style, StyleRecipe, GenerationRecord } from '../../../src/domain/types';
+
+/**
+ * Best-effort "your room preview is ready" email to the customer, fired once
+ * a funnel-sourced generation succeeds and the lead has an email on file
+ * (captured earlier in the questionnaire step — a lead reached via the
+ * test-bench never has one). The link carries the lead's opaque `leadToken`
+ * so it works from a brand-new device/browser where a fresh anonymous auth
+ * uid wouldn't otherwise satisfy the lead's ownership check (see
+ * `getResultByTokenDoc` in `../result.ts`).
+ *
+ * Wrapped in its own try/catch — separate from the outer runGeneration
+ * try/catch — so a mail-composition failure can never be mistaken for a
+ * generation failure and flip an already-succeeded lead to 'failed'.
+ */
+async function sendResultReadyEmail(leadId: string, lead: Lead): Promise<void> {
+  if (!lead.email) return;
+  try {
+    const appBaseUrl = process.env.APP_BASE_URL ?? 'http://localhost:5173';
+    const resultUrl = `${appBaseUrl}/result?lead=${encodeURIComponent(leadId)}&token=${encodeURIComponent(lead.leadToken)}`;
+    const html = `
+      <h2>Your room preview is ready! ✨</h2>
+      <p>Marjorie's AI stylist has finished reimagining your space. Take a look:</p>
+      <p><a href="${resultUrl}">${escapeHtml(resultUrl)}</a></p>
+    `.trim();
+    await sendEmailDoc({
+      to: lead.email,
+      subject: 'Your room preview is ready ✨',
+      html,
+      kind: 'result_ready',
+      leadId,
+    });
+  } catch (err) {
+    console.error(`runGeneration: failed to send result-ready email for lead ${leadId}`, err);
+  }
+}
 
 export async function runGeneration(leadId: string, provider?: GenerationProvider) {
   const ref = db.collection('leads').doc(leadId);
@@ -63,6 +99,7 @@ export async function runGeneration(leadId: string, provider?: GenerationProvide
       'timestamps.generated': Date.now(), updatedAt: Date.now(),
     });
     await logEventDoc({ type: 'generation_completed', leadId, meta: { durationMs } });
+    await sendResultReadyEmail(leadId, lead);
   } catch (err) {
     // Route ANY failure above to the same terminal state. We deliberately
     // do NOT call assertTransition here: if the lead's current status is

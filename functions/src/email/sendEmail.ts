@@ -35,7 +35,7 @@ export async function sendEmailDoc(input: {
  * escaping, a customer could inject markup (e.g. `<a href="...">`,
  * `<img onerror=...>`) into Marjorie's inbox.
  */
-function escapeHtml(v: unknown): string {
+export function escapeHtml(v: unknown): string {
   if (v === null || v === undefined) return '';
   return String(v)
     .replace(/&/g, '&amp;')
