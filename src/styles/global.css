@@ -427,3 +427,81 @@ select:focus-visible {
 .lead-card-answers dd {
   margin: 0;
 }
+
+/* Style edit/create form */
+.admin-form-section {
+  margin-bottom: var(--space-5);
+}
+
+.admin-form-field {
+  margin-bottom: var(--space-4);
+}
+
+.admin-form-field label {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-weight: 600;
+}
+
+.admin-form-field textarea {
+  min-height: 80px;
+}
+
+.admin-form-field-checkbox label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-form-field-checkbox input {
+  width: auto;
+}
+
+.admin-gallery-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.admin-gallery-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.admin-gallery-thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.admin-gallery-url {
+  flex: 1;
+  overflow-wrap: anywhere;
+  color: var(--color-ink-muted);
+  font-size: 0.85rem;
+}
+
+.admin-gallery-add {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-end;
+}
+
+.admin-gallery-add .admin-form-field {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.admin-form-actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  margin-top: var(--space-5);
+}
