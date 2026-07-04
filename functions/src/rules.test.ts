@@ -58,4 +58,20 @@ describe('firestore rules', () => {
     const u1 = env.authenticatedContext('u1').firestore();
     await assertFails(u1.collection('generations').doc('g2').get());
   });
+
+  it('lets an admin read a mail doc', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().collection('mail').doc('m1').set({ to: 'a@b.com' });
+    });
+    const admin = env.authenticatedContext('admin1', { admin: true }).firestore();
+    await assertSucceeds(admin.collection('mail').doc('m1').get());
+  });
+
+  it('forbids a non-admin from reading a mail doc', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().collection('mail').doc('m2').set({ to: 'a@b.com' });
+    });
+    const u1 = env.authenticatedContext('u1').firestore();
+    await assertFails(u1.collection('mail').doc('m2').get());
+  });
 });
