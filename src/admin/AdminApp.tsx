@@ -6,6 +6,7 @@ import { LeadCardPage } from './LeadCardPage';
 import { StylesListPage } from './StylesListPage';
 import { StyleEditPage } from './StyleEditPage';
 import { TestBenchPage } from './TestBenchPage';
+import { ConfigPage } from './ConfigPage';
 import { AdminNav } from './AdminNav';
 import { useAdminAuth } from './useAdminAuth';
 
@@ -73,6 +74,7 @@ export function AdminApp() {
           <Route path="styles/new" element={<StyleEditPage />} />
           <Route path="styles/:slug" element={<StyleEditPage />} />
           <Route path="testbench" element={<TestBenchPage />} />
+          <Route path="config" element={<ConfigPage />} />
         </Routes>
       </main>
     </div>

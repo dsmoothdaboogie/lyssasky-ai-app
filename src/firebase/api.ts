@@ -200,6 +200,17 @@ export async function fetchAllStyles(): Promise<Style[]> {
   return snap.docs.map((d) => d.data() as Style);
 }
 
+/**
+ * Wraps the `adminUpdateConfig` callable (functions/src/admin/config.ts).
+ * The callable merges `patch` onto the existing `config/app` doc (creating it
+ * from DEFAULT_CONFIG if missing) after server-side validation, so callers
+ * only need to send the fields that changed.
+ */
+export async function apiAdminUpdateConfig(patch: Partial<AppConfig>): Promise<Ok> {
+  const fn = httpsCallable<{ patch: Partial<AppConfig> }, Ok>(functions, 'adminUpdateConfig');
+  return (await fn({ patch })).data;
+}
+
 export async function uploadAdminImage(path: string, file: File): Promise<string> {
   await uploadBytes(ref(storage, path), file);
   return path;
