@@ -5,7 +5,11 @@ import { loadConfig } from '../config';
 import type { AnalyticsSummary, Lead, GenerationRecord, LeadStatus } from '../../../src/domain/types';
 
 const FUNNEL_STATUSES: LeadStatus[] = ['captured', 'paid', 'generated', 'rated', 'booked', 'failed'];
-const REVENUE_STATUSES: ReadonlySet<LeadStatus> = new Set(['paid', 'generated', 'rated', 'booked']);
+// Every lead that reached payment counts toward revenue — including a lead
+// whose generation later failed, since the customer still paid. 'failed' is
+// only ever reachable after 'paid' (see LEAD_TRANSITIONS), so counting it here
+// never over-reports.
+const REVENUE_STATUSES: ReadonlySet<LeadStatus> = new Set(['paid', 'generated', 'rated', 'booked', 'failed']);
 
 export async function computeAnalytics(): Promise<AnalyticsSummary> {
   const config = await loadConfig();

@@ -99,7 +99,15 @@ export async function runGeneration(leadId: string, provider?: GenerationProvide
       'timestamps.generated': Date.now(), updatedAt: Date.now(),
     });
     await logEventDoc({ type: 'generation_completed', leadId, meta: { durationMs } });
-    await sendResultReadyEmail(leadId, lead);
+    // Only the FIRST successful preview emails the customer. `lead` is the
+    // pre-run snapshot, so an empty generatedImagePaths means this is their
+    // first image — a regenerate (or a retry after an earlier success) runs
+    // through here again with images already on file and must not re-send the
+    // "your preview is ready" mail. A retry after a *failed* first attempt
+    // still has none, so that customer is correctly emailed on first success.
+    if (lead.generatedImagePaths.length === 0) {
+      await sendResultReadyEmail(leadId, lead);
+    }
   } catch (err) {
     // Route ANY failure above to the same terminal state. We deliberately
     // do NOT call assertTransition here: if the lead's current status is

@@ -63,6 +63,18 @@ describe('handleLeadBooked', () => {
     await expect(handleLeadBooked('does-not-exist')).resolves.toBeUndefined();
   });
 
+  it('is idempotent — a redelivered booked trigger does not queue a second email', async () => {
+    const leadId = await seedBookedLead('owner-booked-dup');
+
+    // At-least-once trigger delivery: handleLeadBooked can run twice for the
+    // same booked transition. The second run must not add another mail doc.
+    await handleLeadBooked(leadId);
+    await handleLeadBooked(leadId);
+
+    const snap = await db.collection('mail').where('leadId', '==', leadId).get();
+    expect(snap.size).toBe(1);
+  });
+
   it('escapes HTML injected via customer-controlled fields', async () => {
     const { leadId } = await createLeadDoc('owner-booked-injection');
     const ref = db.collection('leads').doc(leadId);

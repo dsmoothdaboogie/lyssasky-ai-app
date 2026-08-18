@@ -72,13 +72,33 @@ function renderBookingHtml(leadId: string, lead: Lead): string {
 }
 
 /**
- * Composes and queues the "new booking" briefing email to Marjorie. Loads
- * the lead fresh (rather than trusting the trigger's `after` snapshot) so
- * this stays independently testable/callable, mirroring handleLeadPaid in
+ * Firestore triggers are delivered at-least-once, so the same booked
+ * transition can invoke onLeadBooked more than once (a redelivery, or two
+ * near-simultaneous deliveries). Claim the notification inside a transaction —
+ * mirroring claimLeadForGeneration in generation/runGeneration.ts — reading
+ * the *live* doc and setting `bookingNotifiedAt` only if it isn't already set,
+ * so a redelivery can never queue a second briefing email. Returns the claimed
+ * lead (for rendering) or null if there's nothing to send.
+ */
+async function claimBookingNotification(leadId: string): Promise<Lead | null> {
+  const ref = db.collection('leads').doc(leadId);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const lead = snap.data() as Lead | undefined;
+    if (!lead || lead.status !== 'booked' || lead.bookingNotifiedAt) return null;
+    tx.update(ref, { bookingNotifiedAt: Date.now() });
+    return lead;
+  });
+}
+
+/**
+ * Composes and queues the "new booking" briefing email to Marjorie. The claim
+ * above both dedupes redelivered triggers and hands back the live lead, so this
+ * stays independently testable/callable, mirroring handleLeadPaid in
  * generation/runGeneration.ts.
  */
 export async function handleLeadBooked(leadId: string): Promise<void> {
-  const lead = (await db.collection('leads').doc(leadId).get()).data() as Lead | undefined;
+  const lead = await claimBookingNotification(leadId);
   if (!lead) return;
 
   const config = await loadConfig();

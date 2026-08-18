@@ -164,6 +164,31 @@ describe('runGeneration result-ready email', () => {
     expect(doc.message.html).toContain('tok6');
   });
 
+  it('does not re-send the result_ready email on a regenerate — only the first success emails', async () => {
+    await seedStyle();
+    const ref = db.collection('leads').doc();
+    await ref.set({
+      id: ref.id, ownerUid: 'u8', leadToken: 'tok8', status: 'paid',
+      email: 'customer@example.com',
+      answers: { roomType: 'living_room', styleSlug: 'scandi', colorMood: 'warm_cozy', budget: '1k_5k', timeline: 'asap' },
+      originalPhotoPath: 'leads/u8/original.jpg',
+      generatedImagePaths: [], costEstimateTotal: 0, timestamps: {}, createdAt: 0, updatedAt: 0,
+    });
+    await seedOriginalPhoto('leads/u8/original.jpg');
+
+    // First generation: success -> one result_ready email.
+    await runGeneration(ref.id, createMockGenerationProvider());
+    // Regenerate the same (now 'generated') lead: a second image, but no second email.
+    await runGeneration(ref.id, createMockGenerationProvider());
+
+    const lead = (await ref.get()).data()!;
+    expect(lead.generatedImagePaths).toHaveLength(2);
+
+    const snap = await db.collection('mail').where('leadId', '==', ref.id).get();
+    const resultReady = snap.docs.filter((d) => d.data().kind === 'result_ready');
+    expect(resultReady).toHaveLength(1);
+  });
+
   it('does not send an email when the lead has no email on file', async () => {
     await seedStyle();
     const ref = db.collection('leads').doc();

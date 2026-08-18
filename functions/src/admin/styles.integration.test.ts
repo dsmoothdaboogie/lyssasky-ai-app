@@ -42,4 +42,10 @@ describe('admin styles', () => {
   it('rejects a style missing a name', () => {
     expect(() => validateStyle({ ...style, name: '' })).toThrow(/name/i);
   });
+  it('accepts a slug containing hyphens', () => {
+    expect(validateStyle({ ...style, slug: 'mid-century' }).slug).toBe('mid-century');
+  });
+  it('rejects a slug with spaces or uppercase', () => {
+    expect(() => validateStyle({ ...style, slug: 'Mid Century' })).toThrow(/slug/i);
+  });
 });

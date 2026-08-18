@@ -26,4 +26,18 @@ describe('admin config', () => {
     const result = validateConfigPatch({ priceCents: 700, bogusField: 1 });
     expect(result).toEqual({ priceCents: 700 });
   });
+
+  it('rejects an empty notifyEmail', () => {
+    expect(() => validateConfigPatch({ notifyEmail: '' })).toThrow(/notifyEmail/i);
+  });
+
+  it('rejects a notifyEmail that is not an email address', () => {
+    expect(() => validateConfigPatch({ notifyEmail: 'not-an-email' })).toThrow(/notifyEmail/i);
+  });
+
+  it('accepts and trims a valid notifyEmail', () => {
+    expect(validateConfigPatch({ notifyEmail: '  hi@lyssasky.com  ' })).toEqual({
+      notifyEmail: 'hi@lyssasky.com',
+    });
+  });
 });

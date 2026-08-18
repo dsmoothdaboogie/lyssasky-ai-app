@@ -115,10 +115,12 @@ describe('computeAnalytics', () => {
     expect(summary.timelineDistribution.within_3_months).toBe(1);
   });
 
-  it('computes revenueCents from leads that progressed past payment, using config priceCents', async () => {
+  it('counts every lead that paid as revenue, including paid-then-failed leads', async () => {
     const summary = await computeAnalytics();
-    // paid(1) + generated(1) + rated(2) + booked(2) = 6 leads past payment
-    expect(summary.revenueCents).toBe(6 * DEFAULT_CONFIG.priceCents);
+    // Every lead that reached payment counts — even one whose generation later
+    // failed (the customer still paid): paid(1) + generated(1) + rated(2) +
+    // booked(2) + failed(1) = 7. Only the pre-payment 'captured' lead is out.
+    expect(summary.revenueCents).toBe(7 * DEFAULT_CONFIG.priceCents);
   });
 
   it('summarizes generations: total, failed, avgDurationMs, estCostCents', async () => {

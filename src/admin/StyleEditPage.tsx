@@ -182,7 +182,13 @@ export function StyleEditPage() {
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
               disabled={!isCreate}
+              aria-describedby="style-slug-hint"
             />
+            <p id="style-slug-hint" className="text-muted">
+              Lowercase letters, numbers, hyphens, and underscores only. Used as
+              the URL identifier — it can&rsquo;t be changed after the style is
+              created.
+            </p>
           </div>
 
           <div className="admin-form-field">

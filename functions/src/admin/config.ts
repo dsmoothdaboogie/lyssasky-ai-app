@@ -93,7 +93,13 @@ export function validateConfigPatch(patch: unknown): Partial<AppConfig> {
     out.calendlyUrl = str(p.calendlyUrl, 'calendlyUrl');
   }
   if ('notifyEmail' in p) {
-    out.notifyEmail = str(p.notifyEmail, 'notifyEmail');
+    const v = p.notifyEmail;
+    // This is the recipient of the booking-notification mail at go-live, so an
+    // empty or malformed value would silently misroute Marjorie's briefings.
+    if (typeof v !== 'string' || !/^\S+@\S+\.\S+$/.test(v.trim())) {
+      throw new HttpsError('invalid-argument', 'Invalid notifyEmail: must be a non-empty email address');
+    }
+    out.notifyEmail = v.trim();
   }
   if ('paymentMode' in p) {
     const v = p.paymentMode;
