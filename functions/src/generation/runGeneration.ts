@@ -7,7 +7,7 @@ import { logEventDoc } from '../events';
 import { sendEmailDoc, escapeHtml } from '../email/sendEmail';
 import { generateImage } from './generateImage';
 import type { GenerationProvider } from './provider';
-import type { Lead, Style, StyleRecipe, GenerationRecord } from '../../../src/domain/types';
+import type { Lead, Look, QuestionnaireAnswers, Style, StyleRecipe, GenerationRecord } from '../../../src/domain/types';
 
 /**
  * Best-effort "your room preview is ready" email to the customer, fired once
@@ -44,76 +44,53 @@ async function sendResultReadyEmail(leadId: string, lead: Lead): Promise<void> {
   }
 }
 
-export async function runGeneration(leadId: string, provider?: GenerationProvider) {
-  const ref = db.collection('leads').doc(leadId);
-  const lead = (await ref.get()).data() as Lead | undefined;
-  // Nothing to do if the lead doc itself doesn't exist.
-  if (!lead) return;
+export interface LookResult {
+  outputPhotoPath: string;
+  costEstimate: number;
+  durationMs: number;
+}
 
-  // This is a hard requirement: runGeneration must NEVER throw. A thrown
-  // error here would escape the onLeadPaid trigger and strand an
-  // already-PAID lead at status:'paid' forever, with no failure record and
-  // no admin signal. Every step below — style lookup, prompt build, photo
-  // download, the provider call (with its retry), the Storage save, the
-  // generations write, and the lead status update — is covered by this one
-  // try/catch so any failure routes through the same failure path.
-  //
-  // We track whatever context we've learned so far so the failure record
-  // can be as informative as possible even if we fail early (e.g. before a
-  // style doc was ever loaded).
-  let styleSlug = lead.answers?.styleSlug ?? 'unknown';
+/**
+ * Shared generation core for the first preview and restyles: style lookup,
+ * prompt build, generate (+ watermark), and the GenerationRecord write — for
+ * success AND failure. Throws on failure (after recording it); callers own
+ * the lead-doc update and failure semantics.
+ */
+export async function generateLook(
+  leadId: string,
+  lead: Lead,
+  answers: QuestionnaireAnswers,
+  provider?: GenerationProvider,
+): Promise<LookResult> {
+  let styleSlug = answers.styleSlug ?? 'unknown';
   let recipeSnapshot: StyleRecipe = { description: '', materials: '', palette: '', furniture: '', avoid: '' };
   let promptSnapshot = '';
   const inputPhotoPath = lead.originalPhotoPath ?? '';
-
   try {
-    if (!lead.answers || !lead.originalPhotoPath) {
-      throw new Error(`Lead ${leadId} is missing answers or originalPhotoPath; cannot run generation`);
-    }
-    const style = (await db.collection('styles').doc(lead.answers.styleSlug).get()).data() as Style | undefined;
-    if (!style) throw new Error(`Unknown style ${lead.answers.styleSlug}`);
+    if (!lead.originalPhotoPath) throw new Error(`Lead ${leadId} has no originalPhotoPath`);
+    const style = (await db.collection('styles').doc(answers.styleSlug).get()).data() as Style | undefined;
+    if (!style) throw new Error(`Unknown style ${answers.styleSlug}`);
     styleSlug = style.slug;
     recipeSnapshot = style.recipe;
-    const prompt = buildGenerationPrompt({ name: style.name, recipe: style.recipe }, lead.answers);
-    promptSnapshot = prompt;
+    promptSnapshot = buildGenerationPrompt({ name: style.name, recipe: style.recipe }, answers);
     await logEventDoc({ type: 'generation_started', leadId });
 
-    const { outputPhotoPath, durationMs, costEstimate } = await generateImage({
+    const { outputPhotoPath, durationMs, costEstimate, watermarkFailed } = await generateImage({
       inputPhotoPath: lead.originalPhotoPath,
-      prompt,
+      prompt: promptSnapshot,
       provider,
       outputDir: `leads/${lead.ownerUid}/generated`,
+      watermark: true,
     });
-
     const genId = randomUUID();
     await db.collection('generations').doc(genId).set(<GenerationRecord>{
       id: genId, leadId, source: 'funnel', styleSlug, recipeSnapshot,
-      promptSnapshot, inputPhotoPath: lead.originalPhotoPath, outputPhotoPath,
-      durationMs, costEstimate, status: 'success', createdAt: Date.now(),
-    });
-    assertTransition(lead.status, 'generated');
-    await ref.update({
-      status: 'generated',
-      generatedImagePaths: [...lead.generatedImagePaths, outputPhotoPath],
-      costEstimateTotal: lead.costEstimateTotal + costEstimate,
-      'timestamps.generated': Date.now(), updatedAt: Date.now(),
+      promptSnapshot, inputPhotoPath, outputPhotoPath,
+      durationMs, costEstimate, status: 'success', watermarkFailed, createdAt: Date.now(),
     });
     await logEventDoc({ type: 'generation_completed', leadId, meta: { durationMs } });
-    // Only the FIRST successful preview emails the customer. `lead` is the
-    // pre-run snapshot, so an empty generatedImagePaths means this is their
-    // first image — a regenerate (or a retry after an earlier success) runs
-    // through here again with images already on file and must not re-send the
-    // "your preview is ready" mail. A retry after a *failed* first attempt
-    // still has none, so that customer is correctly emailed on first success.
-    if (lead.generatedImagePaths.length === 0) {
-      await sendResultReadyEmail(leadId, lead);
-    }
+    return { outputPhotoPath, costEstimate, durationMs };
   } catch (err) {
-    // Route ANY failure above to the same terminal state. We deliberately
-    // do NOT call assertTransition here: if the lead's current status is
-    // unexpected, assertTransition would throw and this failure handler
-    // itself would escape, re-breaking the no-throw guarantee we exist to
-    // provide. A direct update is used instead.
     try {
       const genId = randomUUID();
       await db.collection('generations').doc(genId).set(<GenerationRecord>{
@@ -121,10 +98,55 @@ export async function runGeneration(leadId: string, provider?: GenerationProvide
         promptSnapshot, inputPhotoPath, durationMs: 0, costEstimate: 0,
         status: 'failed', error: String(err), createdAt: Date.now(),
       });
-      await ref.update({ status: 'failed', 'timestamps.failed': Date.now(), updatedAt: Date.now() });
-    } catch {
-      // Even the failure-path writes must not escape runGeneration.
+    } catch { /* recording the failure must not mask it */ }
+    throw err;
+  }
+}
+
+export async function runGeneration(leadId: string, provider?: GenerationProvider) {
+  const ref = db.collection('leads').doc(leadId);
+  const lead = (await ref.get()).data() as Lead | undefined;
+  if (!lead) return;
+
+  // Hard requirement: runGeneration must NEVER throw (see onLeadPaid) — a
+  // thrown error would strand a PAID lead at 'paid' with no admin signal.
+  try {
+    if (!lead.answers) throw new Error(`Lead ${leadId} is missing answers; cannot run generation`);
+    const { outputPhotoPath, costEstimate } = await generateLook(leadId, lead, lead.answers, provider);
+    assertTransition(lead.status, 'generated');
+    const now = Date.now();
+    const look: Look = {
+      imagePath: outputPhotoPath, styleSlug: lead.answers.styleSlug,
+      colorMood: lead.answers.colorMood, createdAt: now,
+    };
+    await ref.update({
+      status: 'generated',
+      generatedImagePaths: [...lead.generatedImagePaths, outputPhotoPath],
+      looks: [...(lead.looks ?? []), look],
+      costEstimateTotal: lead.costEstimateTotal + costEstimate,
+      'timestamps.generated': now, updatedAt: now,
+    });
+    // Only the FIRST successful preview emails the customer: `lead` is the
+    // pre-run snapshot, so a regenerate/retry-after-success must not re-send.
+    if (lead.generatedImagePaths.length === 0) {
+      await sendResultReadyEmail(leadId, lead);
     }
+  } catch (err) {
+    // generateLook records its own failed GenerationRecord. If we never got
+    // that far (no answers), record one here to keep the existing contract.
+    // Direct update (no assertTransition) so this handler itself can't throw.
+    try {
+      if (!lead.answers) {
+        const genId = randomUUID();
+        await db.collection('generations').doc(genId).set(<GenerationRecord>{
+          id: genId, leadId, source: 'funnel', styleSlug: 'unknown',
+          recipeSnapshot: { description: '', materials: '', palette: '', furniture: '', avoid: '' },
+          promptSnapshot: '', inputPhotoPath: lead.originalPhotoPath ?? '', durationMs: 0, costEstimate: 0,
+          status: 'failed', error: String(err), createdAt: Date.now(),
+        });
+      }
+      await ref.update({ status: 'failed', 'timestamps.failed': Date.now(), updatedAt: Date.now() });
+    } catch { /* must not escape */ }
   }
 }
 

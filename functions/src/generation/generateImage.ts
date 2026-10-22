@@ -3,6 +3,7 @@ import { loadConfig } from '../config';
 import { createMockGenerationProvider } from './mockProvider';
 import { createGeminiGenerationProvider } from './geminiProvider';
 import type { GenerationProvider } from './provider';
+import { applyWatermark } from './watermark';
 
 export async function resolveProvider(): Promise<GenerationProvider> {
   const cfg = await loadConfig();
@@ -17,6 +18,7 @@ export interface GenerateImageInput {
   prompt: string;
   provider?: GenerationProvider;
   outputDir?: string;
+  watermark?: boolean;
 }
 
 export interface GenerateImageResult {
@@ -24,6 +26,7 @@ export interface GenerateImageResult {
   mimeType: string;
   durationMs: number;
   costEstimate: number;
+  watermarkFailed: boolean;
 }
 
 /**
@@ -50,13 +53,22 @@ export async function generateImage(input: GenerateImageInput): Promise<Generate
 
   if (!out) throw new Error(String(lastErr));
 
-  const outputPhotoPath = `${outputDir}/${Date.now()}.png`;
-  await bucket.file(outputPhotoPath).save(out.imageBytes, { contentType: out.mimeType });
+  let imageBytes = out.imageBytes;
+  let mimeType = out.mimeType;
+  let watermarkFailed = false;
+  if (input.watermark) {
+    try {
+      imageBytes = await applyWatermark(out.imageBytes);
+      mimeType = 'image/png';
+    } catch (err) {
+      // Never cost the customer an image over a cosmetic step.
+      console.error('generateImage: watermark failed, saving unwatermarked image', err);
+      watermarkFailed = true;
+    }
+  }
 
-  return {
-    outputPhotoPath,
-    mimeType: out.mimeType,
-    durationMs,
-    costEstimate: out.costEstimate,
-  };
+  const outputPhotoPath = `${outputDir}/${Date.now()}.png`;
+  await bucket.file(outputPhotoPath).save(imageBytes, { contentType: mimeType });
+
+  return { outputPhotoPath, mimeType, durationMs, costEstimate: out.costEstimate, watermarkFailed };
 }
