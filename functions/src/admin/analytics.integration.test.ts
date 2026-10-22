@@ -131,4 +131,18 @@ describe('computeAnalytics', () => {
     // (0.1 + 0.2 + 0.05) * 100 = 35
     expect(summary.generations.estCostCents).toBe(35);
   });
+  it('computes Room Pass metrics', async () => {
+    const mk = (id: string, data: object) => db.collection('leads').doc(id).set({
+      id, ownerUid: 'a', leadToken: 't', status: 'generated', generatedImagePaths: [], costEstimateTotal: 0,
+      timestamps: {}, createdAt: 0, updatedAt: 0, ...data,
+    });
+    await mk('pa', { pass: { restylesTotal: 5, restylesUsed: 1, expiresAt: 0 }, perk: { code: 'ROOM-ZZZ2', discountPct: 10, validUntil: 0, redeemedAt: 5 } });
+    await mk('pb', { pass: { restylesTotal: 5, restylesUsed: 3, expiresAt: 0 }, perk: { code: 'ROOM-ZZZ3', discountPct: 10, validUntil: 0 } });
+    await mk('pc', {}); // legacy, no pass
+    const s = await computeAnalytics();
+    expect(s.pass.paidPasses).toBe(2);
+    expect(s.pass.avgRestylesUsed).toBe(2);
+    expect(s.pass.perksRedeemed).toBe(1);
+    expect(s.pass.perkRedemptionRate).toBe(0.5);
+  });
 });

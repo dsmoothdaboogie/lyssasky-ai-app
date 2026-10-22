@@ -161,4 +161,5 @@ export interface AnalyticsSummary {
   timelineDistribution: Record<string, number>;
   revenueCents: number;
   generations: { total: number; failed: number; avgDurationMs: number; estCostCents: number };
+  pass: { paidPasses: number; avgRestylesUsed: number; perksRedeemed: number; perkRedemptionRate: number };
 }

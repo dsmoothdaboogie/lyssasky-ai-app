@@ -242,6 +242,11 @@ export async function apiAdminUpdateConfig(patch: Partial<AppConfig>): Promise<O
  * Wraps the `adminGetAnalytics` callable (functions/src/admin/analytics.ts),
  * which aggregates leads + generations into a funnel/revenue/style summary.
  */
+export async function apiAdminMarkPerkRedeemed(leadId: string): Promise<Ok> {
+  const fn = httpsCallable<{ leadId: string }, Ok>(functions, 'adminMarkPerkRedeemed');
+  return (await fn({ leadId })).data;
+}
+
 export async function apiAdminGetAnalytics(): Promise<AnalyticsSummary> {
   const fn = httpsCallable<void, AnalyticsSummary>(functions, 'adminGetAnalytics');
   return (await fn()).data;

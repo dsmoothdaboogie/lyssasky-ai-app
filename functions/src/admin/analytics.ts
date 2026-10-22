@@ -71,6 +71,17 @@ export async function computeAnalytics(): Promise<AnalyticsSummary> {
   const avgDurationMs = generations.length > 0 ? totalDurationMs / generations.length : 0;
   const totalCostEstimate = generations.reduce((sum, g) => sum + (g.costEstimate ?? 0), 0);
 
+  const passLeads = leads.filter((l) => l.pass);
+  const perksRedeemed = leads.filter((l) => l.perk?.redeemedAt !== undefined).length;
+  const pass = {
+    paidPasses: passLeads.length,
+    avgRestylesUsed: passLeads.length
+      ? Math.round((passLeads.reduce((s, l) => s + l.pass!.restylesUsed, 0) / passLeads.length) * 100) / 100
+      : 0,
+    perksRedeemed,
+    perkRedemptionRate: passLeads.length ? perksRedeemed / passLeads.length : 0,
+  };
+
   return {
     funnel,
     totalLeads: leads.length,
@@ -85,6 +96,7 @@ export async function computeAnalytics(): Promise<AnalyticsSummary> {
       avgDurationMs,
       estCostCents: Math.round(totalCostEstimate * 100),
     },
+    pass,
   };
 }
 
