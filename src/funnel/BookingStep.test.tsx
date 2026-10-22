@@ -52,6 +52,13 @@ describe('BookingStep', () => {
     vi.mocked(fetchLead).mockResolvedValue(undefined);
   });
 
+  it('shows the all-set state instead of the form when the lead is already booked', async () => {
+    vi.mocked(fetchLead).mockResolvedValue({ id: 'l1', status: 'booked' } as never);
+    renderBookingStep();
+    expect(await screen.findByText(/You're all set — Marjorie will be in touch/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Book my consultation' })).not.toBeInTheDocument();
+  });
+
   it('submits the lead form and calls apiSubmitBooking with the entered name', async () => {
     const user = userEvent.setup();
     renderBookingStep();

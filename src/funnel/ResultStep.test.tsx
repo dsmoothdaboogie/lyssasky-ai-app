@@ -256,6 +256,7 @@ describe('ResultStep', () => {
   });
 
   it('token mode loads via apiGetResultByToken, shows looks and perk but no restyle or rating', async () => {
+    vi.mocked(fetchLead).mockRejectedValue(new Error('permission-denied'));
     vi.mocked(apiGetResultByToken).mockResolvedValue({
       status: 'generated', imageUrls: ['https://img/a', 'https://img/b'],
       looks: [
@@ -268,7 +269,6 @@ describe('ResultStep', () => {
     renderResultStep('/result?lead=l1&token=tok');
     expect(await screen.findByText('Japandi · Light & airy')).toBeInTheDocument();
     expect(apiGetResultByToken).toHaveBeenCalledWith('l1', 'tok');
-    expect(fetchLead).not.toHaveBeenCalled();
     expect(getImageUrl).not.toHaveBeenCalled();
     expect(screen.getAllByRole('button', { name: /^Look \d/ })).toHaveLength(2);
     expect(screen.getByText(/ROOM-7KX2/)).toBeInTheDocument();
@@ -277,12 +277,45 @@ describe('ResultStep', () => {
   });
 
   it('token mode with no looks falls back to imageUrls', async () => {
+    vi.mocked(fetchLead).mockRejectedValue(new Error('permission-denied'));
     vi.mocked(apiGetResultByToken).mockResolvedValue({
       status: 'generated', imageUrls: ['http://x/img.png'], looks: [], pass: null, perk: null,
     });
     renderResultStep('/result?lead=l1&token=t1');
     const img = await screen.findByAltText(/your new room|generated|after/i);
     expect(img).toHaveAttribute('src', 'http://x/img.png');
+  });
+
+  it('token mode on the owner device renders the full owned view', async () => {
+    renderResultStep('/result?lead=l1&token=tok');
+    expect(await screen.findByRole('button', { name: 'Try another look' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Book your free 15-min chat/ })).toBeInTheDocument();
+    expect(apiGetResultByToken).not.toHaveBeenCalled();
+  });
+
+  it('a booked lead sees a booked note instead of the chat CTA', async () => {
+    vi.mocked(fetchLead).mockResolvedValue(makeLead({ status: 'booked' }));
+    renderResultStep();
+    expect(await screen.findByText(/You're booked — Marjorie will have your looks ready/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Book your free 15-min chat/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/ROOM-7KX2/)).toBeInTheDocument();
+  });
+
+  it('scrolls the current look into view after a successful restyle', async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      vi.mocked(apiRestyle).mockResolvedValue({ imagePath: 'leads/u1/generated/1.png', restylesLeft: 3 });
+      renderResultStep();
+      await user.click(await screen.findByRole('button', { name: 'Try another look' }));
+      await user.click(await screen.findByRole('button', { name: /Japandi/ }));
+      await user.click(screen.getByRole('button', { name: 'Light & airy' }));
+      await user.click(screen.getByRole('button', { name: 'Restyle' }));
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' }));
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
   });
 
   it('legacy lead without a pass shows no pass UI', async () => {

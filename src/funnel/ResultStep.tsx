@@ -80,7 +80,9 @@ export function ResultStep() {
   const urlLeadId = searchParams.get('lead');
   const token = searchParams.get('token');
   const tokenMode = Boolean(urlLeadId && token);
-  const owned = !tokenMode;
+  // Token links start read-only; they upgrade to owned when this device's
+  // anonymous uid turns out to own the lead (see the load effect).
+  const [owned, setOwned] = useState(!tokenMode);
 
   const leadId = stateLeadId ?? urlLeadId;
 
@@ -103,6 +105,7 @@ export function ResultStep() {
   const [restyleError, setRestyleError] = useState<string | null>(null);
 
   const mountedRef = useRef(true);
+  const lookRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -134,7 +137,18 @@ export function ResultStep() {
           })
           .catch(() => {});
 
+        let ownedView: Awaited<ReturnType<typeof loadOwnedView>> = null;
         if (tokenMode && token) {
+          // Emailed link opened on the customer's own device: the anonymous uid
+          // is the lead's owner, so try the full owned view first.
+          try {
+            ownedView = await loadOwnedView(leadId);
+          } catch {
+            ownedView = null; // not the owner (or unreadable) — fall back to the token read
+          }
+        }
+
+        if (tokenMode && token && !ownedView) {
           // Emailed cross-device link: this uid doesn't own the lead, so read
           // via the token-authenticated callable instead of fetchLead. It
           // returns already-resolved download URLs (resolved server-side with
@@ -159,7 +173,7 @@ export function ResultStep() {
           return;
         }
 
-        const ownedView = await loadOwnedView(leadId);
+        if (!(tokenMode && token)) ownedView = await loadOwnedView(leadId);
         if (cancelled || !mountedRef.current) return;
 
         if (!ownedView) {
@@ -168,6 +182,7 @@ export function ResultStep() {
           return;
         }
 
+        setOwned(true);
         setLeadId(leadId);
         applyView(ownedView.view);
 
@@ -240,6 +255,8 @@ export function ResultStep() {
       if (!mountedRef.current) return;
       if (refreshed) applyView(refreshed.view);
       setPickerOpen(false);
+      const el = lookRef.current;
+      if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (err) {
       if (!mountedRef.current) return;
       setRestyleError(errorMessage(err));
@@ -303,6 +320,7 @@ export function ResultStep() {
           the details even further once you connect.
         </p>
 
+        <div ref={lookRef}>
         {beforeUrl && afterUrl && (
           <div
             style={{
@@ -346,6 +364,8 @@ export function ResultStep() {
             }}
           />
         )}
+
+        </div>
 
         {currentLabel && <p style={{ textAlign: 'center', fontWeight: 600 }}>{currentLabel}</p>}
 
@@ -417,7 +437,12 @@ export function ResultStep() {
         {(hasPass || showPerk) && (
           <div className="card" style={{ padding: 'var(--space-4)', marginTop: 'var(--space-5)' }}>
             <h2>Make it real with Marjorie</h2>
-            {owned && (
+            {owned && view.status === 'booked' && (
+              <p style={{ textAlign: 'center', fontWeight: 600 }}>
+                You're booked — Marjorie will have your looks ready
+              </p>
+            )}
+            {owned && view.status !== 'booked' && (
               <Link to={`/book?lead=${leadId}`} className="btn btn-primary" style={{ display: 'block', textAlign: 'center' }}>
                 Book your free 15-min chat — Marjorie will have your looks ready
               </Link>

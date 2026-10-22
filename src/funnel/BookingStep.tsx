@@ -52,6 +52,9 @@ export function BookingStep() {
           await ensureAnonymousAuth();
           const lead = await fetchLead(leadId);
           if (!cancelled && lead?.perk && isPerkValid(lead, Date.now())) setPerk(lead.perk);
+          // Already booked (e.g. returning via the emailed link): re-submitting
+          // would be an illegal booked -> booked transition, so show the done state.
+          if (!cancelled && lead?.status === 'booked') setSubmitted(true);
         } catch { /* perk display is a nice-to-have */ }
       }
     })();
