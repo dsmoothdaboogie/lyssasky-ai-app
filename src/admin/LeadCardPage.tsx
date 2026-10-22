@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Button } from '../components/Button';
-import { apiAdminMarkPerkRedeemed, apiRegenerate, fetchLead, getImageUrl } from '../firebase/api';
+import { apiAdminMarkPerkRedeemed, apiRegenerate, fetchAllStyles, fetchLead, getImageUrl } from '../firebase/api';
 import { INTEREST_LABELS } from '../domain/pass';
 import { DEFAULT_CONFIG } from '../config/defaultConfig';
 import type { Lead, LeadStatus, QuestionnaireAnswers } from '../domain/types';
@@ -80,6 +80,20 @@ export function LeadCardPage() {
   const [regenerated, setRegenerated] = useState(false);
   const [regenerateError, setRegenerateError] = useState<string | null>(null);
   const [redeeming, setRedeeming] = useState(false);
+  const [redeemError, setRedeemError] = useState<string | null>(null);
+  const [styleNames, setStyleNames] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAllStyles()
+      .then((all) => {
+        if (!cancelled) setStyleNames(new Map(all.map((st) => [st.slug, st.name])));
+      })
+      .catch(() => {}); // best-effort: the looks list falls back to slugs
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -249,9 +263,12 @@ export function LeadCardPage() {
                   disabled={redeeming}
                   onClick={async () => {
                     setRedeeming(true);
+                    setRedeemError(null);
                     try {
                       await apiAdminMarkPerkRedeemed(lead.id);
                       setLead({ ...lead, perk: { ...lead.perk!, redeemedAt: Date.now() } });
+                    } catch {
+                      setRedeemError("Couldn't mark the perk redeemed — please try again.");
                     } finally {
                       setRedeeming(false);
                     }
@@ -260,12 +277,13 @@ export function LeadCardPage() {
                   Mark perk redeemed
                 </Button>
               )}
+              {redeemError && <p role="alert">{redeemError}</p>}
             </>
           )}
           {lead.looks && lead.looks.length > 0 && (
             <ol>
               {lead.looks.map((look) => (
-                <li key={look.imagePath}>{`${look.styleSlug} · ${labelFor('colorMood', look.colorMood)}`}</li>
+                <li key={look.imagePath}>{`${styleNames.get(look.styleSlug) ?? look.styleSlug} · ${labelFor('colorMood', look.colorMood)}`}</li>
               ))}
             </ol>
           )}
