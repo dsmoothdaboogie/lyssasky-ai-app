@@ -108,6 +108,16 @@ describe('restyleDoc', () => {
     expect(failed.size).toBe(1);
   });
 
+  it('refunds the restyle when the provider hangs past the per-attempt timeout', async () => {
+    const id = await seedPassLead('r8b');
+    const hanging: GenerationProvider = { generate: () => new Promise(() => {}) };
+    await expect(restyleDoc(id, 'r8b', { styleSlug: 'japandi', colorMood: 'warm_cozy' }, { provider: hanging, attemptTimeoutMs: 20 }))
+      .rejects.toThrow(/wasn't used/);
+    const lead = await read(id);
+    expect(lead.pass!.restylesUsed).toBe(0);
+    expect(lead.pass!.inFlight).toBeUndefined();
+  });
+
   it('lets exactly one of two concurrent restyles run', async () => {
     const id = await seedPassLead('r9');
     const results = await Promise.allSettled([

@@ -57,6 +57,7 @@ export async function generateLook(
   lead: Lead,
   answers: QuestionnaireAnswers,
   provider?: GenerationProvider,
+  attemptTimeoutMs?: number,
 ): Promise<LookResult> {
   let styleSlug = answers.styleSlug ?? 'unknown';
   let recipeSnapshot: StyleRecipe = { description: '', materials: '', palette: '', furniture: '', avoid: '' };
@@ -75,6 +76,7 @@ export async function generateLook(
       inputPhotoPath: lead.originalPhotoPath,
       prompt: promptSnapshot,
       provider,
+      attemptTimeoutMs,
       outputDir: `leads/${lead.ownerUid}/generated`,
       watermark: true,
     });

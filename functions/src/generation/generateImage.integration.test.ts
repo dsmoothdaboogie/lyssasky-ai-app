@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { storage } from '../admin';
-import { generateImage } from './generateImage';
+import { generateImage, PROVIDER_ATTEMPT_TIMEOUT_MS } from './generateImage';
 import { createMockGenerationProvider } from './mockProvider';
 import type { GenerationProvider } from './provider';
 
@@ -34,6 +34,18 @@ describe('generateImage', () => {
       provider: createMockGenerationProvider(),
     });
     expect(result.outputPhotoPath).toMatch(/^testbench\/results\//);
+  });
+
+  it('defaults the per-attempt timeout so two attempts fit inside the 120s function limit', () => {
+    expect(PROVIDER_ATTEMPT_TIMEOUT_MS).toBe(50_000);
+  });
+
+  it('rejects with a timeout error when the provider never resolves', async () => {
+    await seedInputPhoto('testbench/in-hang.jpg');
+    const hanging: GenerationProvider = { generate: () => new Promise(() => {}) };
+    await expect(generateImage({
+      inputPhotoPath: 'testbench/in-hang.jpg', prompt: 'restyle', provider: hanging, attemptTimeoutMs: 20,
+    })).rejects.toThrow(/timed out/i);
   });
 
   it('retries once then throws if the provider keeps failing', async () => {

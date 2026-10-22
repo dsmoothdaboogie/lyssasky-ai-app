@@ -67,7 +67,7 @@ export async function restyleDoc(
   leadId: string,
   uid: string,
   input: { styleSlug: string; colorMood: string },
-  opts?: { isAdmin?: boolean; provider?: GenerationProvider },
+  opts?: { isAdmin?: boolean; provider?: GenerationProvider; attemptTimeoutMs?: number },
 ): Promise<{ imagePath: string; restylesLeft: number }> {
   await assertValidChoice(input?.styleSlug, input?.colorMood);
   const lead = await reserveRestyle(leadId, uid, opts?.isAdmin === true);
@@ -76,7 +76,7 @@ export async function restyleDoc(
 
   let result;
   try {
-    result = await generateLook(leadId, lead, answers, opts?.provider);
+    result = await generateLook(leadId, lead, answers, opts?.provider, opts?.attemptTimeoutMs);
   } catch {
     // Refund inside a transaction so a concurrent read never sees a
     // half-refunded pass. Status is deliberately left alone: only a failed

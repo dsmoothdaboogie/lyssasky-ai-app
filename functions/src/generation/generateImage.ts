@@ -13,12 +13,25 @@ export async function resolveProvider(): Promise<GenerationProvider> {
   return createMockGenerationProvider();
 }
 
+/** Two attempts at this bound finish well inside the 120s function timeout, so the caller can still refund. */
+export const PROVIDER_ATTEMPT_TIMEOUT_MS = 50_000;
+
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Provider attempt timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
+}
+
 export interface GenerateImageInput {
   inputPhotoPath: string;
   prompt: string;
   provider?: GenerationProvider;
   outputDir?: string;
   watermark?: boolean;
+  /** Per provider attempt; defaults to PROVIDER_ATTEMPT_TIMEOUT_MS. */
+  attemptTimeoutMs?: number;
 }
 
 export interface GenerateImageResult {
@@ -46,7 +59,13 @@ export async function generateImage(input: GenerateImageInput): Promise<Generate
   const start = Date.now();
   let out; let lastErr: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
-    try { out = await gen.generate({ photoBytes, mimeType: 'image/jpeg', prompt: input.prompt }); break; }
+    try {
+      out = await withTimeout(
+        gen.generate({ photoBytes, mimeType: 'image/jpeg', prompt: input.prompt }),
+        input.attemptTimeoutMs ?? PROVIDER_ATTEMPT_TIMEOUT_MS,
+      );
+      break;
+    }
     catch (e) { lastErr = e; }
   }
   const durationMs = Date.now() - start;
