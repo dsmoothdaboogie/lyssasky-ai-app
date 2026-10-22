@@ -42,9 +42,12 @@ async function loadOwnedView(leadId: string): Promise<{ view: View; originalPath
 }
 
 function errorMessage(err: unknown): string {
-  // HttpsError messages from `restyle` are written for customers.
+  // HttpsError messages from `restyle` are written for customers; SDK-generated
+  // failures (deadline-exceeded, internal) carry the bare code as the message.
   const code = (err as { code?: string } | null)?.code ?? '';
-  return code.startsWith('functions/') && err instanceof Error && err.message ? err.message : GENERIC_ERROR;
+  if (!code.startsWith('functions/') || !(err instanceof Error)) return GENERIC_ERROR;
+  const message = err.message.trim();
+  return message && message !== code.replace('functions/', '') ? message : GENERIC_ERROR;
 }
 
 /**
@@ -240,6 +243,14 @@ export function ResultStep() {
     } catch (err) {
       if (!mountedRef.current) return;
       setRestyleError(errorMessage(err));
+      // The server may have finished after the client gave up — show any look
+      // that landed and the true restyle count. Best-effort only.
+      try {
+        const refreshed = await loadOwnedView(leadId);
+        if (mountedRef.current && refreshed) applyView(refreshed.view);
+      } catch {
+        // Keep the error shown; the refresh is a nicety.
+      }
     } finally {
       if (mountedRef.current) setRestyling(false);
     }

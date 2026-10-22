@@ -179,6 +179,44 @@ describe('ResultStep', () => {
     expect(screen.getByRole('button', { name: 'Restyle' })).toBeInTheDocument();
   });
 
+  it('hides raw SDK error codes behind the generic message', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    vi.mocked(fetchLead).mockResolvedValue(makeLead());
+    vi.mocked(getImageUrl).mockResolvedValue('https://img/1');
+    vi.mocked(apiRestyle).mockRejectedValue(Object.assign(new Error('deadline-exceeded'), { code: 'functions/deadline-exceeded' }));
+    renderResultStep();
+    await user.click(await screen.findByRole('button', { name: 'Try another look' }));
+    await user.click(await screen.findByRole('button', { name: /Japandi/ }));
+    await user.click(screen.getByRole('button', { name: 'Warm & cozy' }));
+    await user.click(screen.getByRole('button', { name: 'Restyle' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Something went wrong on our end');
+    expect(alert).not.toHaveTextContent('deadline-exceeded');
+  });
+
+  it('after a failed restyle, shows a look that actually landed', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const after = makeLead({
+      generatedImagePaths: ['a', 'b'],
+      looks: [
+        { imagePath: 'a', styleSlug: 'scandi', colorMood: 'warm_cozy', createdAt: 1 },
+        { imagePath: 'b', styleSlug: 'japandi', colorMood: 'light_airy', createdAt: 2 },
+      ],
+      pass: { restylesTotal: 5, restylesUsed: 2, expiresAt: Date.UTC(2026, 9, 28, 16) },
+    });
+    vi.mocked(fetchLead).mockResolvedValueOnce(makeLead()).mockResolvedValueOnce(after);
+    vi.mocked(getImageUrl).mockImplementation(async (p) => `https://img/${p}`);
+    vi.mocked(apiRestyle).mockRejectedValue(Object.assign(new Error('deadline-exceeded'), { code: 'functions/deadline-exceeded' }));
+    renderResultStep();
+    await user.click(await screen.findByRole('button', { name: 'Try another look' }));
+    await user.click(await screen.findByRole('button', { name: /Japandi/ }));
+    await user.click(screen.getByRole('button', { name: 'Light & airy' }));
+    await user.click(screen.getByRole('button', { name: 'Restyle' }));
+    expect(await screen.findByText('Japandi · Light & airy')).toBeInTheDocument();
+    expect(screen.getByText('3 restyles left · ends Oct 28')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+  });
+
   it.each([
     ['exhausted', { pass: { restylesTotal: 5, restylesUsed: 5, expiresAt: Date.UTC(2026, 9, 28) } }],
     ['expired', { pass: { restylesTotal: 5, restylesUsed: 1, expiresAt: Date.UTC(2026, 9, 21, 15) } }],

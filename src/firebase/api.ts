@@ -126,7 +126,7 @@ export async function apiRestyle(
   const fn = httpsCallable<
     { leadId: string; styleSlug: string; colorMood: string },
     { imagePath: string; restylesLeft: number }
-  >(functions, 'restyle');
+  >(functions, 'restyle', { timeout: 130_000 });
   return (await fn({ leadId, styleSlug, colorMood })).data;
 }
 
