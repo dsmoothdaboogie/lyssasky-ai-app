@@ -262,6 +262,11 @@ export async function apiAdminMarkPerkRedeemed(leadId: string): Promise<Ok> {
   return (await fn({ leadId })).data;
 }
 
+export async function apiAdminRestoreRestyle(leadId: string): Promise<{ ok: true; restylesUsed: number }> {
+  const fn = httpsCallable<{ leadId: string }, { ok: true; restylesUsed: number }>(functions, 'adminRestoreRestyle');
+  return (await fn({ leadId })).data;
+}
+
 export async function apiAdminGetAnalytics(): Promise<AnalyticsSummary> {
   const fn = httpsCallable<void, AnalyticsSummary>(functions, 'adminGetAnalytics');
   return (await fn()).data;

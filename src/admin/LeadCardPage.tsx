@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Button } from '../components/Button';
-import { apiAdminMarkPerkRedeemed, apiRegenerate, fetchAllStyles, fetchLead, getImageUrl } from '../firebase/api';
+import { apiAdminMarkPerkRedeemed, apiAdminRestoreRestyle, apiRegenerate, fetchAllStyles, fetchLead, getImageUrl } from '../firebase/api';
 import { INTEREST_LABELS } from '../domain/pass';
 import { DEFAULT_CONFIG } from '../config/defaultConfig';
 import type { Lead, LeadStatus, QuestionnaireAnswers } from '../domain/types';
@@ -81,6 +81,8 @@ export function LeadCardPage() {
   const [regenerateError, setRegenerateError] = useState<string | null>(null);
   const [redeeming, setRedeeming] = useState(false);
   const [redeemError, setRedeemError] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
   const [styleNames, setStyleNames] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
@@ -250,6 +252,27 @@ export function LeadCardPage() {
             {lead.pass.restylesUsed} of {lead.pass.restylesTotal} restyles used · ends{' '}
             {formatTimestamp(lead.pass.expiresAt)}
           </p>
+          {lead.pass.restylesUsed > 0 && (
+            <Button
+              disabled={restoring}
+              onClick={async () => {
+                setRestoring(true);
+                setRestoreError(null);
+                try {
+                  const { restylesUsed } = await apiAdminRestoreRestyle(lead.id);
+                  const { inFlight: _inFlight, ...pass } = lead.pass!;
+                  setLead({ ...lead, pass: { ...pass, restylesUsed } });
+                } catch {
+                  setRestoreError("Couldn't give back the restyle — please try again.");
+                } finally {
+                  setRestoring(false);
+                }
+              }}
+            >
+              Give back 1 restyle
+            </Button>
+          )}
+          {restoreError && <p role="alert">{restoreError}</p>}
           {lead.perk && (
             <>
               <p>

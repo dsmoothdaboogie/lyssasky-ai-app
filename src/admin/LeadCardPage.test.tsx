@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { LeadCardPage } from './LeadCardPage';
-import { fetchLead, getImageUrl, apiRegenerate, apiAdminMarkPerkRedeemed, fetchAllStyles } from '../firebase/api';
+import { fetchLead, getImageUrl, apiRegenerate, apiAdminMarkPerkRedeemed, apiAdminRestoreRestyle, fetchAllStyles } from '../firebase/api';
 import type { Lead } from '../domain/types';
 
 vi.mock('../firebase/api', () => ({
@@ -10,6 +10,7 @@ vi.mock('../firebase/api', () => ({
   getImageUrl: vi.fn(),
   apiRegenerate: vi.fn(),
   apiAdminMarkPerkRedeemed: vi.fn().mockResolvedValue({ ok: true }),
+  apiAdminRestoreRestyle: vi.fn().mockResolvedValue({ ok: true, restylesUsed: 1 }),
   fetchAllStyles: vi.fn().mockResolvedValue([
     { slug: 'japandi', name: 'Japandi' },
     { slug: 'scandinavian', name: 'Scandinavian' },
@@ -192,5 +193,55 @@ describe('LeadCardPage', () => {
     await user.click(await screen.findByRole('button', { name: 'Mark perk redeemed' }));
     expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't mark the perk redeemed — please try again.");
     expect(screen.getByRole('button', { name: 'Mark perk redeemed' })).toBeEnabled();
+  });
+
+  const renderCard = () =>
+    render(
+      <MemoryRouter initialEntries={['/admin/leads/l1']}>
+        <Routes><Route path="/admin/leads/:id" element={<LeadCardPage />} /></Routes>
+      </MemoryRouter>,
+    );
+
+  it('hides "Give back 1 restyle" when no restyles are used', async () => {
+    mockedFetchLead.mockResolvedValue({ ...LEAD, pass: { restylesTotal: 5, restylesUsed: 0, expiresAt: Date.UTC(2026, 9, 28) } });
+    mockedGetImageUrl.mockResolvedValue('https://img');
+    renderCard();
+    await screen.findByRole('region', { name: 'Room Pass' });
+    expect(screen.queryByRole('button', { name: 'Give back 1 restyle' })).not.toBeInTheDocument();
+  });
+
+  it('gives back a restyle and updates the count in place', async () => {
+    const user = userEvent.setup();
+    vi.mocked(apiAdminRestoreRestyle).mockResolvedValueOnce({ ok: true, restylesUsed: 1 });
+    mockedFetchLead.mockResolvedValue({ ...LEAD, pass: { restylesTotal: 5, restylesUsed: 2, expiresAt: Date.UTC(2026, 9, 28), inFlight: 123 } });
+    mockedGetImageUrl.mockResolvedValue('https://img');
+    renderCard();
+    await user.click(await screen.findByRole('button', { name: 'Give back 1 restyle' }));
+    expect(vi.mocked(apiAdminRestoreRestyle)).toHaveBeenCalledWith('l1');
+    const section = screen.getByRole('region', { name: 'Room Pass' });
+    await waitFor(() => expect(section).toHaveTextContent('1 of 5 restyles used'));
+    expect(screen.getByRole('button', { name: 'Give back 1 restyle' })).toBeEnabled();
+  });
+
+  it('hides the button once the count reaches zero', async () => {
+    const user = userEvent.setup();
+    vi.mocked(apiAdminRestoreRestyle).mockResolvedValueOnce({ ok: true, restylesUsed: 0 });
+    mockedFetchLead.mockResolvedValue({ ...LEAD, pass: { restylesTotal: 5, restylesUsed: 1, expiresAt: Date.UTC(2026, 9, 28) } });
+    mockedGetImageUrl.mockResolvedValue('https://img');
+    renderCard();
+    await user.click(await screen.findByRole('button', { name: 'Give back 1 restyle' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Give back 1 restyle' })).not.toBeInTheDocument());
+    expect(screen.getByRole('region', { name: 'Room Pass' })).toHaveTextContent('0 of 5 restyles used');
+  });
+
+  it('shows an inline error when giving back a restyle fails', async () => {
+    const user = userEvent.setup();
+    vi.mocked(apiAdminRestoreRestyle).mockRejectedValueOnce(new Error('boom'));
+    mockedFetchLead.mockResolvedValue({ ...LEAD, pass: { restylesTotal: 5, restylesUsed: 2, expiresAt: Date.UTC(2026, 9, 28) } });
+    mockedGetImageUrl.mockResolvedValue('https://img');
+    renderCard();
+    await user.click(await screen.findByRole('button', { name: 'Give back 1 restyle' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't give back the restyle — please try again.");
+    expect(screen.getByRole('region', { name: 'Room Pass' })).toHaveTextContent('2 of 5 restyles used');
   });
 });

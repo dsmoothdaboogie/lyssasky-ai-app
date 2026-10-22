@@ -15,3 +15,4 @@ export { adminUpdateConfig } from './admin/config';
 export { adminTestBenchGenerate } from './admin/testbench';
 export { adminGetAnalytics } from './admin/analytics';
 export { adminMarkPerkRedeemed } from './admin/perk';
+export { adminRestoreRestyle } from './admin/restoreRestyle';
