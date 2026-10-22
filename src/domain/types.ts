@@ -95,7 +95,6 @@ export interface Lead {
   booking?: { name: string; phone?: string; note?: string; interest?: BookingInterest };
   costEstimateTotal: number;         // sum of generation cost estimates
   timestamps: Partial<Record<LeadStatus, number>>; // ms since epoch per status
-  regenerateCount?: number;          // owner-initiated regenerates from a completed lead (cap: 1)
   generationClaimedAt?: number;      // set atomically when onLeadPaid claims a 'paid' lead, guards against duplicate/redelivered triggers
   bookingNotifiedAt?: number;        // set atomically when onLeadBooked claims a 'booked' lead, guards against duplicate/redelivered triggers
   pass?: LeadPass;                   // Room Pass, issued at payment

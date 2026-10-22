@@ -3,6 +3,7 @@ import { onCall } from 'firebase-functions/v2/https';
 export const helloWorld = onCall(() => ({ ok: true }));
 
 export { createLead, updateLeadAnswers, attachPhoto, submitFeedback, submitBooking, regenerate } from './leads';
+export { restyle } from './restyle';
 export { logEvent } from './events';
 export { startCheckout, confirmPaymentMock } from './checkout';
 export { onLeadPaid } from './generation/runGeneration';
