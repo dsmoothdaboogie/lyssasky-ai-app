@@ -7,10 +7,10 @@ import type {
   AnalyticsSummary,
   AppConfig,
   Lead,
-  LeadStatus,
   QuestionnaireAnswers,
   Style,
   StyleRecipe,
+  TokenResult,
 } from '../domain/types';
 import { DEFAULT_CONFIG } from '../config/defaultConfig';
 
@@ -22,7 +22,9 @@ type Ok = { ok: true };
  */
 export async function fetchAppConfig(): Promise<AppConfig> {
   const snap = await getDoc(doc(db, 'config', 'app'));
-  return snap.exists() ? (snap.data() as AppConfig) : DEFAULT_CONFIG;
+  // Field-merge over the defaults so a doc written before a newer field
+  // existed (e.g. the Room Pass settings) doesn't surface `undefined` in the UI.
+  return snap.exists() ? { ...DEFAULT_CONFIG, ...(snap.data() as Partial<AppConfig>) } : DEFAULT_CONFIG;
 }
 
 /**
@@ -116,6 +118,18 @@ export async function apiRegenerate(leadId: string): Promise<Ok> {
   return res.data;
 }
 
+export async function apiRestyle(
+  leadId: string,
+  styleSlug: string,
+  colorMood: string,
+): Promise<{ imagePath: string; restylesLeft: number }> {
+  const fn = httpsCallable<
+    { leadId: string; styleSlug: string; colorMood: string },
+    { imagePath: string; restylesLeft: number }
+  >(functions, 'restyle', { timeout: 130_000 });
+  return (await fn({ leadId, styleSlug, colorMood })).data;
+}
+
 export async function apiLogEvent(
   type: AnalyticsEventType,
   leadId?: string,
@@ -148,10 +162,10 @@ export async function apiLogEvent(
 export async function apiGetResultByToken(
   leadId: string,
   leadToken: string
-): Promise<{ status: LeadStatus; imageUrls: string[] }> {
+): Promise<TokenResult> {
   const fn = httpsCallable<
     { leadId: string; leadToken: string },
-    { status: LeadStatus; imageUrls: string[] }
+    TokenResult
   >(functions, 'getResultByToken');
   const res = await fn({ leadId, leadToken });
   return res.data;
@@ -240,6 +254,11 @@ export async function apiAdminUpdateConfig(patch: Partial<AppConfig>): Promise<O
  * Wraps the `adminGetAnalytics` callable (functions/src/admin/analytics.ts),
  * which aggregates leads + generations into a funnel/revenue/style summary.
  */
+export async function apiAdminMarkPerkRedeemed(leadId: string): Promise<Ok> {
+  const fn = httpsCallable<{ leadId: string }, Ok>(functions, 'adminMarkPerkRedeemed');
+  return (await fn({ leadId })).data;
+}
+
 export async function apiAdminGetAnalytics(): Promise<AnalyticsSummary> {
   const fn = httpsCallable<void, AnalyticsSummary>(functions, 'adminGetAnalytics');
   return (await fn()).data;

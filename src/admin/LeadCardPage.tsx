@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Button } from '../components/Button';
-import { apiRegenerate, fetchLead, getImageUrl } from '../firebase/api';
+import { apiAdminMarkPerkRedeemed, apiRegenerate, fetchAllStyles, fetchLead, getImageUrl } from '../firebase/api';
+import { INTEREST_LABELS } from '../domain/pass';
 import { DEFAULT_CONFIG } from '../config/defaultConfig';
 import type { Lead, LeadStatus, QuestionnaireAnswers } from '../domain/types';
 
@@ -78,6 +79,21 @@ export function LeadCardPage() {
   const [regenerating, setRegenerating] = useState(false);
   const [regenerated, setRegenerated] = useState(false);
   const [regenerateError, setRegenerateError] = useState<string | null>(null);
+  const [redeeming, setRedeeming] = useState(false);
+  const [redeemError, setRedeemError] = useState<string | null>(null);
+  const [styleNames, setStyleNames] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAllStyles()
+      .then((all) => {
+        if (!cancelled) setStyleNames(new Map(all.map((st) => [st.slug, st.name])));
+      })
+      .catch(() => {}); // best-effort: the looks list falls back to slugs
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -227,6 +243,53 @@ export function LeadCardPage() {
         </p>
       </section>
 
+      {lead.pass && (
+        <section className="card" aria-label="Room Pass">
+          <h2>Room Pass</h2>
+          <p>
+            {lead.pass.restylesUsed} of {lead.pass.restylesTotal} restyles used · ends{' '}
+            {formatTimestamp(lead.pass.expiresAt)}
+          </p>
+          {lead.perk && (
+            <>
+              <p>
+                Perk <strong>{lead.perk.code}</strong> — {lead.perk.discountPct}% off, valid until{' '}
+                {formatTimestamp(lead.perk.validUntil)}
+              </p>
+              {lead.perk.redeemedAt != null ? (
+                <p>Redeemed {formatTimestamp(lead.perk.redeemedAt)}</p>
+              ) : (
+                <Button
+                  disabled={redeeming}
+                  onClick={async () => {
+                    setRedeeming(true);
+                    setRedeemError(null);
+                    try {
+                      await apiAdminMarkPerkRedeemed(lead.id);
+                      setLead({ ...lead, perk: { ...lead.perk!, redeemedAt: Date.now() } });
+                    } catch {
+                      setRedeemError("Couldn't mark the perk redeemed — please try again.");
+                    } finally {
+                      setRedeeming(false);
+                    }
+                  }}
+                >
+                  Mark perk redeemed
+                </Button>
+              )}
+              {redeemError && <p role="alert">{redeemError}</p>}
+            </>
+          )}
+          {lead.looks && lead.looks.length > 0 && (
+            <ol>
+              {lead.looks.map((look) => (
+                <li key={look.imagePath}>{`${styleNames.get(look.styleSlug) ?? look.styleSlug} · ${labelFor('colorMood', look.colorMood)}`}</li>
+              ))}
+            </ol>
+          )}
+        </section>
+      )}
+
       <section className="card">
         <h2>Booking</h2>
         {lead.booking ? (
@@ -237,6 +300,8 @@ export function LeadCardPage() {
             <dd>{lead.booking.phone || '—'}</dd>
             <dt>Note</dt>
             <dd>{lead.booking.note || '—'}</dd>
+            <dt>Interested in</dt>
+            <dd>{lead.booking.interest ? INTEREST_LABELS[lead.booking.interest] : '—'}</dd>
           </dl>
         ) : (
           <p className="text-muted">Not booked yet.</p>

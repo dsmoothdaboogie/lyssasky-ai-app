@@ -44,6 +44,10 @@ export function ConfigPage() {
   const [notifyEmail, setNotifyEmail] = useState('');
   const [paymentMode, setPaymentMode] = useState<AppConfig['paymentMode']>('mock');
   const [generationMode, setGenerationMode] = useState<AppConfig['generationMode']>('mock');
+  const [passRestyles, setPassRestyles] = useState('5');
+  const [passDays, setPassDays] = useState('7');
+  const [perkDiscountPct, setPerkDiscountPct] = useState('10');
+  const [perkDays, setPerkDays] = useState('30');
   const [flagRows, setFlagRows] = useState<FlagRow[]>([]);
   const [questionnaire, setQuestionnaire] = useState<QuestionDef[]>([]);
 
@@ -63,6 +67,10 @@ export function ConfigPage() {
         setNotifyEmail(config.notifyEmail);
         setPaymentMode(config.paymentMode);
         setGenerationMode(config.generationMode);
+        setPassRestyles(String(config.passRestyles));
+        setPassDays(String(config.passDays));
+        setPerkDiscountPct(String(config.perkDiscountPct));
+        setPerkDays(String(config.perkDays));
         setFlagRows(flagsToRows(config.featureFlags));
         setQuestionnaire(config.questionnaire);
       })
@@ -143,6 +151,10 @@ export function ConfigPage() {
       notifyEmail: notifyEmail.trim(),
       paymentMode,
       generationMode,
+      passRestyles: Number.parseInt(passRestyles, 10),
+      passDays: Number.parseInt(passDays, 10),
+      perkDiscountPct: Number.parseInt(perkDiscountPct, 10),
+      perkDays: Number.parseInt(perkDays, 10),
       featureFlags: rowsToFlags(flagRows),
       questionnaire,
     };
@@ -244,6 +256,29 @@ export function ConfigPage() {
               <option value="gemini">gemini</option>
             </select>
           </div>
+        </section>
+
+        <section className="card admin-form-section">
+          <h2>Room Pass</h2>
+          <p className="text-muted">Applies to new passes only — existing passes keep what they paid for.</p>
+          {[
+            ['config-pass-restyles', 'Restyles per pass', passRestyles, setPassRestyles],
+            ['config-pass-days', 'Pass length (days)', passDays, setPassDays],
+            ['config-perk-pct', 'Perk discount (%)', perkDiscountPct, setPerkDiscountPct],
+            ['config-perk-days', 'Perk valid for (days)', perkDays, setPerkDays],
+          ].map(([id, label, value, set]) => (
+            <div className="admin-form-field" key={id as string}>
+              <label htmlFor={id as string}>{label as string}</label>
+              <input
+                id={id as string}
+                type="number"
+                step="1"
+                min="0"
+                value={value as string}
+                onChange={(e) => (set as (v: string) => void)(e.target.value)}
+              />
+            </div>
+          ))}
         </section>
 
         <section className="card admin-form-section">

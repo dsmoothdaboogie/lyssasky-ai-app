@@ -1,7 +1,8 @@
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { db } from '../admin';
 import { loadConfig } from '../config';
-import type { Lead, MailDocument } from '../../../src/domain/types';
+import { escapeHtml, renderBookingHtml, type EmailLabels } from './templates';
+import type { Lead, MailDocument, Style } from '../../../src/domain/types';
 
 /**
  * Writes a document to the `mail` collection in the exact shape the Firebase
@@ -26,63 +27,50 @@ export async function sendEmailDoc(input: {
   });
 }
 
+export { escapeHtml };
+
+export async function loadEmailLabels(): Promise<EmailLabels> {
+  const [stylesSnap, config] = await Promise.all([db.collection('styles').get(), loadConfig()]);
+  const names = new Map(stylesSnap.docs.map((d) => [(d.data() as Style).slug, (d.data() as Style).name]));
+  const moods = new Map(
+    (config.questionnaire.find((q) => q.id === 'colorMood')?.options ?? []).map((o) => [o.value, o.label]),
+  );
+  return { styleName: (s) => names.get(s) ?? s, moodLabel: (v) => moods.get(v) ?? v };
+}
+
 /**
- * Escapes HTML-significant characters in a value before it is interpolated
- * into the booking notification email. All of the values rendered by
- * `renderBookingHtml` originate from customer-controlled free text (lead
- * email, questionnaire answers, feedback, booking details), and at go-live
- * the Trigger Email extension sends this HTML as real mail — so without
- * escaping, a customer could inject markup (e.g. `<a href="...">`,
- * `<img onerror=...>`) into Marjorie's inbox.
+ * Firestore triggers are delivered at-least-once, so the same booked
+ * transition can invoke onLeadBooked more than once (a redelivery, or two
+ * near-simultaneous deliveries). Claim the notification inside a transaction —
+ * mirroring claimLeadForGeneration in generation/runGeneration.ts — reading
+ * the *live* doc and setting `bookingNotifiedAt` only if it isn't already set,
+ * so a redelivery can never queue a second briefing email. Returns the claimed
+ * lead (for rendering) or null if there's nothing to send.
  */
-export function escapeHtml(v: unknown): string {
-  if (v === null || v === undefined) return '';
-  return String(v)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function renderBookingHtml(leadId: string, lead: Lead): string {
-  const appBaseUrl = process.env.APP_BASE_URL ?? 'http://localhost:5173';
-  const leadUrl = `${appBaseUrl}/admin/leads/${leadId}`;
-  const answersList = lead.answers
-    ? Object.entries(lead.answers)
-        .map(([key, value]) => `<li><strong>${escapeHtml(key)}:</strong> ${escapeHtml(value)}</li>`)
-        .join('')
-    : '<li>No questionnaire answers on file</li>';
-  const booking = lead.booking;
-
-  return `
-    <h2>New booking from ${lead.email ? escapeHtml(lead.email) : 'unknown customer'}</h2>
-    <p><strong>Customer email:</strong> ${lead.email ? escapeHtml(lead.email) : 'n/a'}</p>
-    <h3>Questionnaire answers</h3>
-    <ul>${answersList}</ul>
-    <h3>Feedback on the design</h3>
-    <p><strong>Rating:</strong> ${lead.rating !== undefined && lead.rating !== null ? escapeHtml(lead.rating) : 'n/a'}</p>
-    <p><strong>What would you change:</strong> ${lead.feedback ? escapeHtml(lead.feedback) : 'n/a'}</p>
-    <h3>Booking details</h3>
-    <p><strong>Name:</strong> ${booking?.name ? escapeHtml(booking.name) : 'n/a'}</p>
-    <p><strong>Phone:</strong> ${booking?.phone ? escapeHtml(booking.phone) : 'n/a'}</p>
-    <p><strong>Note:</strong> ${booking?.note ? escapeHtml(booking.note) : 'n/a'}</p>
-    <p><a href="${leadUrl}">${leadUrl}</a></p>
-  `.trim();
+async function claimBookingNotification(leadId: string): Promise<Lead | null> {
+  const ref = db.collection('leads').doc(leadId);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const lead = snap.data() as Lead | undefined;
+    if (!lead || lead.status !== 'booked' || lead.bookingNotifiedAt) return null;
+    tx.update(ref, { bookingNotifiedAt: Date.now() });
+    return lead;
+  });
 }
 
 /**
- * Composes and queues the "new booking" briefing email to Marjorie. Loads
- * the lead fresh (rather than trusting the trigger's `after` snapshot) so
- * this stays independently testable/callable, mirroring handleLeadPaid in
+ * Composes and queues the "new booking" briefing email to Marjorie. The claim
+ * above both dedupes redelivered triggers and hands back the live lead, so this
+ * stays independently testable/callable, mirroring handleLeadPaid in
  * generation/runGeneration.ts.
  */
 export async function handleLeadBooked(leadId: string): Promise<void> {
-  const lead = (await db.collection('leads').doc(leadId).get()).data() as Lead | undefined;
+  const lead = await claimBookingNotification(leadId);
   if (!lead) return;
 
   const config = await loadConfig();
-  const html = renderBookingHtml(leadId, lead);
+  const appBaseUrl = process.env.APP_BASE_URL ?? 'http://localhost:5173';
+  const html = renderBookingHtml(leadId, lead, appBaseUrl, await loadEmailLabels());
   await sendEmailDoc({
     to: config.notifyEmail,
     subject: `New booking from ${lead.email ?? 'a customer'}`,

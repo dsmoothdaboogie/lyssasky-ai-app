@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db, storage } from './admin';
-import type { Lead, LeadStatus } from '../../src/domain/types';
+import type { Lead, TokenResult } from '../../src/domain/types';
 
 /**
  * Resolves a Storage path to a public "download token" URL — the same
@@ -57,16 +57,21 @@ async function resolveDownloadUrl(path: string): Promise<string> {
  * for the owning uid or an admin — but the whole point of this callable is
  * to serve a device whose fresh anonymous uid is neither.
  */
-export async function getResultByTokenDoc(
-  leadId: string,
-  leadToken: string
-): Promise<{ status: LeadStatus; imageUrls: string[] }> {
+export async function getResultByTokenDoc(leadId: string, leadToken: string): Promise<TokenResult> {
   const lead = (await db.collection('leads').doc(leadId).get()).data() as Lead | undefined;
   if (!lead || lead.leadToken !== leadToken) {
     throw new HttpsError('permission-denied', 'Invalid link');
   }
   const imageUrls = await Promise.all(lead.generatedImagePaths.map(resolveDownloadUrl));
-  return { status: lead.status, imageUrls };
+  const urlByPath = new Map(lead.generatedImagePaths.map((p, i) => [p, imageUrls[i]]));
+  const looks = (lead.looks ?? [])
+    .filter((l) => urlByPath.has(l.imagePath))
+    .map((l) => ({ url: urlByPath.get(l.imagePath)!, styleSlug: l.styleSlug, colorMood: l.colorMood }));
+  // inFlight is an internal concurrency guard; never expose it to the client.
+  const pass = lead.pass
+    ? { restylesTotal: lead.pass.restylesTotal, restylesUsed: lead.pass.restylesUsed, expiresAt: lead.pass.expiresAt }
+    : null;
+  return { status: lead.status, imageUrls, looks, pass, perk: lead.perk ?? null };
 }
 
 export const getResultByToken = onCall(async (req) => {

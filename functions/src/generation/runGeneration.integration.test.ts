@@ -3,6 +3,7 @@ import { db, storage } from '../admin';
 import { runGeneration, handleLeadPaid } from './runGeneration';
 import { createMockGenerationProvider } from './mockProvider';
 import type { GenerationProvider } from './provider';
+import sharp from 'sharp';
 
 async function seedStyle() {
   await db.collection('styles').doc('scandi').set({
@@ -164,6 +165,31 @@ describe('runGeneration result-ready email', () => {
     expect(doc.message.html).toContain('tok6');
   });
 
+  it('does not re-send the result_ready email on a regenerate — only the first success emails', async () => {
+    await seedStyle();
+    const ref = db.collection('leads').doc();
+    await ref.set({
+      id: ref.id, ownerUid: 'u8', leadToken: 'tok8', status: 'paid',
+      email: 'customer@example.com',
+      answers: { roomType: 'living_room', styleSlug: 'scandi', colorMood: 'warm_cozy', budget: '1k_5k', timeline: 'asap' },
+      originalPhotoPath: 'leads/u8/original.jpg',
+      generatedImagePaths: [], costEstimateTotal: 0, timestamps: {}, createdAt: 0, updatedAt: 0,
+    });
+    await seedOriginalPhoto('leads/u8/original.jpg');
+
+    // First generation: success -> one result_ready email.
+    await runGeneration(ref.id, createMockGenerationProvider());
+    // Regenerate the same (now 'generated') lead: a second image, but no second email.
+    await runGeneration(ref.id, createMockGenerationProvider());
+
+    const lead = (await ref.get()).data()!;
+    expect(lead.generatedImagePaths).toHaveLength(2);
+
+    const snap = await db.collection('mail').where('leadId', '==', ref.id).get();
+    const resultReady = snap.docs.filter((d) => d.data().kind === 'result_ready');
+    expect(resultReady).toHaveLength(1);
+  });
+
   it('does not send an email when the lead has no email on file', async () => {
     await seedStyle();
     const ref = db.collection('leads').doc();
@@ -179,5 +205,52 @@ describe('runGeneration result-ready email', () => {
 
     const snap = await db.collection('mail').where('leadId', '==', ref.id).get();
     expect(snap.size).toBe(0);
+  });
+});
+
+const bigImageProvider: GenerationProvider = {
+  async generate() {
+    const imageBytes = await sharp({ create: { width: 800, height: 600, channels: 3, background: '#808080' } }).png().toBuffer();
+    return { imageBytes, mimeType: 'image/png', costEstimate: 0.04 };
+  },
+};
+
+async function seedPaidLead(ownerUid: string) {
+  await seedStyle();
+  const ref = db.collection('leads').doc();
+  const originalPhotoPath = `leads/${ownerUid}/original.jpg`;
+  await ref.set({
+    id: ref.id, ownerUid, leadToken: `tok-${ownerUid}`, status: 'paid', looks: [],
+    answers: { roomType: 'living_room', styleSlug: 'scandi', colorMood: 'warm_cozy', budget: '1k_5k', timeline: 'asap' },
+    originalPhotoPath,
+    generatedImagePaths: [], costEstimateTotal: 0, timestamps: {}, createdAt: 0, updatedAt: 0,
+  });
+  await seedOriginalPhoto(originalPhotoPath);
+  return ref.id;
+}
+
+describe('runGeneration — Room Pass', () => {
+  it('records the first preview as a labeled look', async () => {
+    const leadId = await seedPaidLead('owner-look');
+    await runGeneration(leadId);
+    const lead = (await db.collection('leads').doc(leadId).get()).data()!;
+    expect(lead.looks).toHaveLength(1);
+    expect(lead.looks[0]).toMatchObject({
+      imagePath: lead.generatedImagePaths[0],
+      styleSlug: lead.answers.styleSlug,
+      colorMood: lead.answers.colorMood,
+    });
+  });
+
+  it('watermarks funnel output', async () => {
+    const leadId = await seedPaidLead('owner-wm');
+    await runGeneration(leadId, bigImageProvider);
+    const lead = (await db.collection('leads').doc(leadId).get()).data()!;
+    const [saved] = await storage.bucket().file(lead.generatedImagePaths[0]).download();
+    const corner = await sharp(saved).extract({ left: 560, top: 540, width: 200, height: 40 }).raw().toBuffer();
+    const plain = await sharp({ create: { width: 200, height: 40, channels: 3, background: '#808080' } }).raw().toBuffer();
+    expect(corner.equals(plain)).toBe(false);
+    const gen = await db.collection('generations').where('leadId', '==', leadId).get();
+    expect(gen.docs[0].data().watermarkFailed).toBe(false);
   });
 });

@@ -1,5 +1,6 @@
 /**
- * Seeds `config/app` (DEFAULT_CONFIG) and the 8 curated `styles/*` docs.
+ * Seeds `config/app` (DEFAULT_CONFIG), the 8 curated `styles/*` docs, and
+ * sample Room Pass leads (one per pass state, with placeholder images in Storage).
  *
  * Safety: this only ever runs against the Firestore emulator. It refuses to
  * run unless FIRESTORE_EMULATOR_HOST is set, so there's no risk of
@@ -8,10 +9,13 @@
  * Usage:
  *   npm run seed
  *   firebase emulators:exec --only firestore,auth,storage 'npm run seed'
+ *
+ * Sample leads write to Storage, so the Storage emulator must be running too.
  */
 import { db } from '../admin';
 import { DEFAULT_CONFIG } from '../../../src/config/defaultConfig';
 import { STYLES } from './styles.data';
+import { seedSampleLeads } from './sampleLeads';
 
 async function main() {
   if (!process.env.FIRESTORE_EMULATOR_HOST) {
@@ -29,6 +33,9 @@ async function main() {
     await db.collection('styles').doc(style.slug).set(style);
     console.log(`Wrote styles/${style.slug} (sortOrder=${style.sortOrder}, name="${style.name}").`);
   }
+
+  const sampleIds = await seedSampleLeads(Date.now());
+  console.log(`Wrote ${sampleIds.length} sample Room Pass leads: ${sampleIds.join(', ')}.`);
 
   console.log(`Seed complete: config/app + ${STYLES.length} styles.`);
 }

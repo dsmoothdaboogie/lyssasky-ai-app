@@ -65,6 +65,14 @@ describe('StyleEditPage', () => {
       expect(screen.getByLabelText(/^slug$/i)).not.toBeDisabled();
     });
 
+    test('shows the allowed slug-format hint', () => {
+      renderPage('/admin/styles/new');
+
+      expect(
+        screen.getByText(/lowercase letters, numbers, hyphens/i),
+      ).toBeInTheDocument();
+    });
+
     test('fills in fields and submits, saving a matching Style and navigating to the list', async () => {
       const user = userEvent.setup();
       renderPage('/admin/styles/new');

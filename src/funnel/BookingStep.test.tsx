@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { FunnelProvider } from './useFunnelState';
 import { BookingStep } from './BookingStep';
-import { apiSubmitBooking, fetchAppConfig, apiLogEvent } from '../firebase/api';
+import { apiSubmitBooking, fetchAppConfig, apiLogEvent, fetchLead } from '../firebase/api';
 import { ensureAnonymousAuth } from '../firebase/client';
 import { DEFAULT_CONFIG } from '../config/defaultConfig';
 
@@ -22,6 +22,7 @@ vi.mock('../firebase/api', () => ({
     questionnaire: [],
   }),
   apiLogEvent: vi.fn().mockResolvedValue({ ok: true }),
+  fetchLead: vi.fn(),
 }));
 
 vi.mock('../firebase/client', () => ({
@@ -48,6 +49,14 @@ describe('BookingStep', () => {
     });
     (ensureAnonymousAuth as ReturnType<typeof vi.fn>).mockResolvedValue('u1');
     (apiLogEvent as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true });
+    vi.mocked(fetchLead).mockResolvedValue(undefined);
+  });
+
+  it('shows the all-set state instead of the form when the lead is already booked', async () => {
+    vi.mocked(fetchLead).mockResolvedValue({ id: 'l1', status: 'booked' } as never);
+    renderBookingStep();
+    expect(await screen.findByText(/You're all set — Marjorie will be in touch/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Book my consultation' })).not.toBeInTheDocument();
   });
 
   it('submits the lead form and calls apiSubmitBooking with the entered name', async () => {
@@ -83,5 +92,30 @@ describe('BookingStep', () => {
 
     const iframe = await screen.findByTitle(/book with marjorie/i);
     await waitFor(() => expect(iframe).toHaveAttribute('src', CALENDLY_URL));
+  });
+
+  it('shows the perk code and sends the chosen interest', async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchLead).mockResolvedValue({
+      id: 'l1', ownerUid: 'u1', leadToken: 't', status: 'rated', generatedImagePaths: [],
+      costEstimateTotal: 0, timestamps: {}, createdAt: 0, updatedAt: 0,
+      perk: { code: 'ROOM-7KX2', discountPct: 10, validUntil: Date.now() + 86_400_000 },
+    } as never);
+    renderBookingStep();
+    expect(await screen.findByText(/ROOM-7KX2/)).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Name'), 'Jane');
+    await user.selectOptions(screen.getByLabelText("I'm interested in"), 'virtual_styling');
+    await user.click(screen.getByRole('button', { name: 'Book my consultation' }));
+    await waitFor(() => expect(apiSubmitBooking).toHaveBeenCalledWith('l1', { name: 'Jane', interest: 'virtual_styling' }));
+  });
+
+  it('defaults interest to the free chat', async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchLead).mockResolvedValue(undefined);
+    renderBookingStep();
+    await user.type(screen.getByLabelText('Name'), 'Jane');
+    await user.click(screen.getByRole('button', { name: 'Book my consultation' }));
+    await waitFor(() => expect(apiSubmitBooking).toHaveBeenCalledWith('l1', { name: 'Jane', interest: 'chat' }));
   });
 });

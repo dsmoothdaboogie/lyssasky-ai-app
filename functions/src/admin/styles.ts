@@ -3,7 +3,7 @@ import { db } from '../admin';
 import { assertAdmin } from '../guards';
 import type { Style, StyleRecipe } from '../../../src/domain/types';
 
-const SLUG_RE = /^[a-z0-9_]+$/;
+const SLUG_RE = /^[a-z0-9_-]+$/;
 function str(v: unknown, field: string): string {
   if (typeof v !== 'string' || v.trim() === '') throw new HttpsError('invalid-argument', `Missing ${field}`);
   return v;
@@ -14,7 +14,7 @@ export function validateStyle(input: unknown): Style {
   }
   const s = input as Record<string, unknown>;
   const slug = str(s.slug, 'slug');
-  if (!SLUG_RE.test(slug)) throw new HttpsError('invalid-argument', 'slug must be lowercase letters, numbers, underscores');
+  if (!SLUG_RE.test(slug)) throw new HttpsError('invalid-argument', 'slug must be lowercase letters, numbers, hyphens, or underscores');
   const r = (s.recipe ?? {}) as Record<string, unknown>;
   const recipe: StyleRecipe = {
     description: str(r.description, 'recipe.description'),

@@ -5,7 +5,11 @@ import { loadConfig } from '../config';
 import type { AnalyticsSummary, Lead, GenerationRecord, LeadStatus } from '../../../src/domain/types';
 
 const FUNNEL_STATUSES: LeadStatus[] = ['captured', 'paid', 'generated', 'rated', 'booked', 'failed'];
-const REVENUE_STATUSES: ReadonlySet<LeadStatus> = new Set(['paid', 'generated', 'rated', 'booked']);
+// Every lead that reached payment counts toward revenue — including a lead
+// whose generation later failed, since the customer still paid. 'failed' is
+// only ever reachable after 'paid' (see LEAD_TRANSITIONS), so counting it here
+// never over-reports.
+const REVENUE_STATUSES: ReadonlySet<LeadStatus> = new Set(['paid', 'generated', 'rated', 'booked', 'failed']);
 
 export async function computeAnalytics(): Promise<AnalyticsSummary> {
   const config = await loadConfig();
@@ -67,6 +71,17 @@ export async function computeAnalytics(): Promise<AnalyticsSummary> {
   const avgDurationMs = generations.length > 0 ? totalDurationMs / generations.length : 0;
   const totalCostEstimate = generations.reduce((sum, g) => sum + (g.costEstimate ?? 0), 0);
 
+  const passLeads = leads.filter((l) => l.pass);
+  const perksRedeemed = leads.filter((l) => l.perk?.redeemedAt !== undefined).length;
+  const pass = {
+    paidPasses: passLeads.length,
+    avgRestylesUsed: passLeads.length
+      ? Math.round((passLeads.reduce((s, l) => s + l.pass!.restylesUsed, 0) / passLeads.length) * 100) / 100
+      : 0,
+    perksRedeemed,
+    perkRedemptionRate: passLeads.length ? perksRedeemed / passLeads.length : 0,
+  };
+
   return {
     funnel,
     totalLeads: leads.length,
@@ -81,6 +96,7 @@ export async function computeAnalytics(): Promise<AnalyticsSummary> {
       avgDurationMs,
       estCostCents: Math.round(totalCostEstimate * 100),
     },
+    pass,
   };
 }
 

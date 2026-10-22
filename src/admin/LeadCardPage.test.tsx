@@ -2,13 +2,18 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { LeadCardPage } from './LeadCardPage';
-import { fetchLead, getImageUrl, apiRegenerate } from '../firebase/api';
+import { fetchLead, getImageUrl, apiRegenerate, apiAdminMarkPerkRedeemed, fetchAllStyles } from '../firebase/api';
 import type { Lead } from '../domain/types';
 
 vi.mock('../firebase/api', () => ({
   fetchLead: vi.fn(),
   getImageUrl: vi.fn(),
   apiRegenerate: vi.fn(),
+  apiAdminMarkPerkRedeemed: vi.fn().mockResolvedValue({ ok: true }),
+  fetchAllStyles: vi.fn().mockResolvedValue([
+    { slug: 'japandi', name: 'Japandi' },
+    { slug: 'scandinavian', name: 'Scandinavian' },
+  ]),
 }));
 
 const mockedFetchLead = vi.mocked(fetchLead);
@@ -123,5 +128,69 @@ describe('LeadCardPage', () => {
     await user.click(screen.getByRole('button', { name: /re-run generation/i }));
 
     expect(mockedApiRegenerate).toHaveBeenCalledWith('l1');
+  });
+  it('shows pass usage, labeled looks and the perk, and marks it redeemed', async () => {
+    const user = userEvent.setup();
+    mockedFetchLead.mockResolvedValue({
+      ...LEAD,
+      pass: { restylesTotal: 5, restylesUsed: 2, expiresAt: Date.UTC(2026, 9, 28) },
+      perk: { code: 'ROOM-7KX2', discountPct: 10, validUntil: Date.UTC(2026, 10, 20) },
+      looks: [
+        { imagePath: 'leads/l1/generated/1.png', styleSlug: 'scandinavian', colorMood: 'warm_cozy', createdAt: 1 },
+        { imagePath: 'leads/l1/generated/2.png', styleSlug: 'japandi', colorMood: 'light_airy', createdAt: 2 },
+      ],
+      booking: { name: 'Jane', interest: 'room_refresh' },
+    });
+    mockedGetImageUrl.mockResolvedValue('https://img');
+    render(
+      <MemoryRouter initialEntries={['/admin/leads/l1']}>
+        <Routes><Route path="/admin/leads/:id" element={<LeadCardPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    const section = await screen.findByRole('region', { name: 'Room Pass' });
+    expect(section).toHaveTextContent('2 of 5 restyles used');
+    expect(section).toHaveTextContent('ROOM-7KX2');
+    expect(section).toHaveTextContent('10% off');
+    expect(await screen.findByText('Japandi · Light & airy')).toBeInTheDocument();
+    expect(screen.getByText('Room Refresh (from $650/room, local)')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Mark perk redeemed' }));
+    expect(vi.mocked(apiAdminMarkPerkRedeemed)).toHaveBeenCalledWith('l1');
+    expect(await screen.findByText(/Redeemed/)).toBeInTheDocument();
+  });
+
+  it('falls back to the slug when styles cannot be fetched', async () => {
+    vi.mocked(fetchAllStyles).mockRejectedValueOnce(new Error('nope'));
+    mockedFetchLead.mockResolvedValue({
+      ...LEAD,
+      pass: { restylesTotal: 5, restylesUsed: 2, expiresAt: Date.UTC(2026, 9, 28) },
+      looks: [{ imagePath: 'leads/l1/generated/2.png', styleSlug: 'japandi', colorMood: 'light_airy', createdAt: 2 }],
+    });
+    mockedGetImageUrl.mockResolvedValue('https://img');
+    render(
+      <MemoryRouter initialEntries={['/admin/leads/l1']}>
+        <Routes><Route path="/admin/leads/:id" element={<LeadCardPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('japandi · Light & airy')).toBeInTheDocument();
+  });
+
+  it('shows an inline error when marking the perk redeemed fails', async () => {
+    const user = userEvent.setup();
+    vi.mocked(apiAdminMarkPerkRedeemed).mockRejectedValueOnce(new Error('boom'));
+    mockedFetchLead.mockResolvedValue({
+      ...LEAD,
+      pass: { restylesTotal: 5, restylesUsed: 2, expiresAt: Date.UTC(2026, 9, 28) },
+      perk: { code: 'ROOM-7KX2', discountPct: 10, validUntil: Date.UTC(2026, 10, 20) },
+    });
+    mockedGetImageUrl.mockResolvedValue('https://img');
+    render(
+      <MemoryRouter initialEntries={['/admin/leads/l1']}>
+        <Routes><Route path="/admin/leads/:id" element={<LeadCardPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    await user.click(await screen.findByRole('button', { name: 'Mark perk redeemed' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't mark the perk redeemed — please try again.");
+    expect(screen.getByRole('button', { name: 'Mark perk redeemed' })).toBeEnabled();
   });
 });

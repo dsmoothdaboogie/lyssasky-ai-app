@@ -172,6 +172,16 @@ export function AnalyticsPage() {
         </div>
       </section>
 
+      <section className="card admin-analytics-section" aria-label="Room Pass">
+        <h2>Room Pass</h2>
+        <div className="admin-stat-grid">
+          <StatTile label="Paid passes" value={data.pass.paidPasses} />
+          <StatTile label="Avg restyles used" value={data.pass.avgRestylesUsed} />
+          <StatTile label="Perks redeemed" value={data.pass.perksRedeemed} />
+          <StatTile label="Redemption rate" value={`${Math.round(data.pass.perkRedemptionRate * 100)}%`} />
+        </div>
+      </section>
+
       <section className="card admin-analytics-section" aria-label="Style popularity">
         <h2>Style popularity</h2>
         {data.stylePopularity.length === 0 ? (

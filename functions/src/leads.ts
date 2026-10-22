@@ -5,6 +5,7 @@ import { assertOwner } from './guards';
 import { assertTransition } from '../../src/domain/leadStatus';
 import { logEventDoc } from './events';
 import { runGeneration } from './generation/runGeneration';
+import { BOOKING_INTERESTS } from '../../src/domain/pass';
 import type { Lead, QuestionnaireAnswers } from '../../src/domain/types';
 
 export async function createLeadDoc(ownerUid: string) {
@@ -89,12 +90,15 @@ export const submitFeedback = onCall(async (req) => {
 export async function submitBookingDoc(
   leadId: string,
   uid: string,
-  booking: { name: string; phone?: string; note?: string }
+  booking: NonNullable<Lead['booking']>
 ): Promise<void> {
   const ref = db.collection('leads').doc(leadId);
   const lead = (await ref.get()).data() as Lead | undefined;
   if (!lead) throw new HttpsError('not-found', 'Lead not found');
   assertOwner(uid, lead);
+  if (booking.interest !== undefined && !BOOKING_INTERESTS.includes(booking.interest)) {
+    throw new HttpsError('invalid-argument', 'Unknown booking interest');
+  }
   assertTransition(lead.status, 'booked');
   const now = Date.now();
   await ref.update({ booking, status: 'booked', 'timestamps.booked': now, updatedAt: now });
@@ -127,29 +131,13 @@ export async function regenerateDoc(
   }
 
   assertOwner(uid, lead);
-  // Owners may retry a failed generation (e.g. from the WaitScreen's "Try
-  // again" button) in addition to re-rolling a completed one.
-  if (lead.status !== 'generated' && lead.status !== 'rated' && lead.status !== 'failed') {
-    throw new HttpsError('failed-precondition', 'Regeneration is only available after your first design is ready.');
+  // Owners may only retry a FAILED first preview (WaitScreen "Try again").
+  // Trying new looks on a successful lead goes through `restyle` and the
+  // Room Pass, which replaced the old one-free-regenerate rule.
+  if (lead.status !== 'failed') {
+    throw new HttpsError('failed-precondition', 'Use a restyle from your Room Pass to try another look.');
   }
-
-  // Server-side enforcement of the "one free re-generate" cap. A retry of a
-  // FAILED generation doesn't consume the customer's free re-generate — only
-  // a regenerate kicked off from an already-successful ('generated'/'rated')
-  // lead counts toward the cap.
-  const countsTowardCap = lead.status === 'generated' || lead.status === 'rated';
-  if (countsTowardCap && (lead.regenerateCount ?? 0) >= 1) {
-    throw new HttpsError(
-      'resource-exhausted',
-      "You've already used your free re-generate — book a consult with Marjorie to explore more."
-    );
-  }
-
   await runGeneration(leadId);
-
-  if (countsTowardCap) {
-    await ref.update({ regenerateCount: (lead.regenerateCount ?? 0) + 1 });
-  }
 }
 
 export const regenerate = onCall(async (req) => {

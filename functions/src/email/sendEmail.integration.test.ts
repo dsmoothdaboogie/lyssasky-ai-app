@@ -63,6 +63,18 @@ describe('handleLeadBooked', () => {
     await expect(handleLeadBooked('does-not-exist')).resolves.toBeUndefined();
   });
 
+  it('is idempotent — a redelivered booked trigger does not queue a second email', async () => {
+    const leadId = await seedBookedLead('owner-booked-dup');
+
+    // At-least-once trigger delivery: handleLeadBooked can run twice for the
+    // same booked transition. The second run must not add another mail doc.
+    await handleLeadBooked(leadId);
+    await handleLeadBooked(leadId);
+
+    const snap = await db.collection('mail').where('leadId', '==', leadId).get();
+    expect(snap.size).toBe(1);
+  });
+
   it('escapes HTML injected via customer-controlled fields', async () => {
     const { leadId } = await createLeadDoc('owner-booked-injection');
     const ref = db.collection('leads').doc(leadId);
@@ -88,4 +100,19 @@ describe('handleLeadBooked', () => {
     expect(doc.message.html).toContain('&lt;script&gt;');
     expect(doc.message.html).toContain('&lt;a ');
   });
+});
+
+it('booking notification carries the perk code and interest', async () => {
+  const { leadId } = await createLeadDoc('mail-perk');
+  await db.collection('leads').doc(leadId).update({
+    status: 'booked', email: 'c@example.com',
+    booking: { name: 'Jane', interest: 'virtual_styling' },
+    perk: { code: 'ROOM-MAIL', discountPct: 10, validUntil: Date.now() + 1000 },
+    looks: [],
+  });
+  await handleLeadBooked(leadId);
+  const snap = await db.collection('mail').where('leadId', '==', leadId).get();
+  const html = snap.docs[0].data().message.html as string;
+  expect(html).toContain('ROOM-MAIL');
+  expect(html).toContain('Virtual Styling');
 });

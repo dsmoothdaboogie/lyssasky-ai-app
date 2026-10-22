@@ -73,11 +73,14 @@ export function MockCheckoutPage() {
         </p>
 
         <div className="card" style={{ padding: 'var(--space-4)', marginTop: 'var(--space-4)' }}>
-          <p style={{ fontWeight: 600, marginBottom: 'var(--space-2)' }}>Room restyle preview</p>
+          <p style={{ fontWeight: 600, marginBottom: 'var(--space-2)' }}>Room Pass</p>
           <p style={{ fontSize: '1.5rem', margin: 0 }}>$5 CAD</p>
-          <p className="text-muted" style={{ marginTop: 'var(--space-2)' }}>
-            A first look at what your room could feel like.
-          </p>
+          <ul className="text-muted" style={{ marginTop: 'var(--space-2)', paddingLeft: '1.2em' }}>
+            <li>Your first restyle preview, plus up to 5 more looks</li>
+            <li>7 days to explore styles and moods</li>
+            <li>A free 15-min chat with Marjorie</li>
+            <li>10% off Virtual Styling or Room Refresh</li>
+          </ul>
         </div>
 
         {error && (

@@ -19,6 +19,7 @@ const FIXTURE: AnalyticsSummary = {
   timelineDistribution: { asap: 8, '3_6_months': 11 },
   revenueCents: 1500,
   generations: { total: 5, failed: 1, avgDurationMs: 4200, estCostCents: 320 },
+  pass: { paidPasses: 6, avgRestylesUsed: 2.5, perksRedeemed: 1, perkRedemptionRate: 1 / 6 },
 };
 
 function renderPage() {
@@ -75,5 +76,13 @@ describe('AnalyticsPage', () => {
     renderPage();
 
     expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+  test('shows Room Pass metrics', async () => {
+    mockedApiAdminGetAnalytics.mockResolvedValue(FIXTURE);
+    renderPage();
+    const section = await screen.findByRole('region', { name: 'Room Pass' });
+    expect(within(section).getByText('6')).toBeInTheDocument(); // paid passes
+    expect(within(section).getByText('2.5')).toBeInTheDocument(); // avg restyles
+    expect(within(section).getByText('17%')).toBeInTheDocument(); // 1/6 redemption
   });
 });

@@ -8,13 +8,11 @@ export interface FunnelState {
   answers: Partial<QuestionnaireAnswers>;
   email: string | null;
   originalPhotoPreviewUrl: string | null;
-  regenerateUsed: boolean;
   setLeadId(id: string | null): void;
   setUid(uid: string | null): void;
   mergeAnswers(patch: Partial<QuestionnaireAnswers>): void;
   setEmail(email: string | null): void;
   setOriginalPhotoPreviewUrl(url: string | null): void;
-  setRegenerateUsed(used: boolean): void;
   reset(): void;
 }
 
@@ -30,7 +28,6 @@ export function FunnelProvider({ children }: { children: ReactNode }) {
   const [answers, setAnswers] = useState<Partial<QuestionnaireAnswers>>({});
   const [email, setEmail] = useState<string | null>(null);
   const [originalPhotoPreviewUrl, setOriginalPhotoPreviewUrl] = useState<string | null>(null);
-  const [regenerateUsed, setRegenerateUsed] = useState(false);
 
   const mergeAnswers = useCallback((patch: Partial<QuestionnaireAnswers>) => {
     setAnswers((prev) => ({ ...prev, ...patch }));
@@ -42,7 +39,6 @@ export function FunnelProvider({ children }: { children: ReactNode }) {
     setAnswers({});
     setEmail(null);
     setOriginalPhotoPreviewUrl(null);
-    setRegenerateUsed(false);
   }, []);
 
   const value = useMemo<FunnelState>(
@@ -52,16 +48,14 @@ export function FunnelProvider({ children }: { children: ReactNode }) {
       answers,
       email,
       originalPhotoPreviewUrl,
-      regenerateUsed,
       setLeadId,
       setUid,
       mergeAnswers,
       setEmail,
       setOriginalPhotoPreviewUrl,
-      setRegenerateUsed,
       reset,
     }),
-    [leadId, uid, answers, email, originalPhotoPreviewUrl, regenerateUsed, mergeAnswers, reset]
+    [leadId, uid, answers, email, originalPhotoPreviewUrl, mergeAnswers, reset]
   );
 
   return createElement(FunnelStateContext.Provider, { value }, children);

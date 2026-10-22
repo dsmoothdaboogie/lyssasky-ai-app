@@ -3,12 +3,15 @@ import { onCall } from 'firebase-functions/v2/https';
 export const helloWorld = onCall(() => ({ ok: true }));
 
 export { createLead, updateLeadAnswers, attachPhoto, submitFeedback, submitBooking, regenerate } from './leads';
+export { restyle } from './restyle';
 export { logEvent } from './events';
 export { startCheckout, confirmPaymentMock } from './checkout';
 export { onLeadPaid } from './generation/runGeneration';
 export { onLeadBooked } from './email/sendEmail';
+export { passReminderSchedule } from './email/passReminder';
 export { getResultByToken } from './result';
 export { adminSaveStyle, adminDeleteStyle } from './admin/styles';
 export { adminUpdateConfig } from './admin/config';
 export { adminTestBenchGenerate } from './admin/testbench';
 export { adminGetAnalytics } from './admin/analytics';
+export { adminMarkPerkRedeemed } from './admin/perk';
