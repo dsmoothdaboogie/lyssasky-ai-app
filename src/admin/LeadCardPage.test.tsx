@@ -210,6 +210,14 @@ describe('LeadCardPage', () => {
     expect(screen.queryByRole('button', { name: 'Give back 1 restyle' })).not.toBeInTheDocument();
   });
 
+  it('hides "Give back 1 restyle" when the pass has expired', async () => {
+    mockedFetchLead.mockResolvedValue({ ...LEAD, pass: { restylesTotal: 5, restylesUsed: 2, expiresAt: Date.UTC(2020, 0, 1) } });
+    mockedGetImageUrl.mockResolvedValue('https://img');
+    renderCard();
+    await screen.findByRole('region', { name: 'Room Pass' });
+    expect(screen.queryByRole('button', { name: 'Give back 1 restyle' })).not.toBeInTheDocument();
+  });
+
   it('gives back a restyle and updates the count in place', async () => {
     const user = userEvent.setup();
     vi.mocked(apiAdminRestoreRestyle).mockResolvedValueOnce({ ok: true, restylesUsed: 1 });

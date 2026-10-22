@@ -46,7 +46,7 @@ function RoomTile({ color, tone }: { color: string; tone: 'before' | 'after' }) 
 /**
  * Funnel entry point. Sets the warm, no-pressure tone, shows a few
  * illustrative before/after tiles (inline SVG only — no remote assets),
- * and hands off to the upload step for a $5 restyle preview.
+ * and hands off to the upload step for a Room Pass purchase.
  */
 export function LandingPage() {
   const navigate = useNavigate();
@@ -72,7 +72,7 @@ export function LandingPage() {
         <h1>See your room, restyled</h1>
         <p>
           Upload one photo of your space and get a <strong>{price} Room Pass</strong>: see your room
-          in up to {1 + config.passRestyles} looks over {config.passDays} days, plus a free chat with Marjorie and {config.perkDiscountPct}% off her services.
+          in {config.passRestyles === 0 ? '1 look' : `up to ${1 + config.passRestyles} looks`} over {config.passDays} days, plus a free chat with Marjorie and {config.perkDiscountPct}% off her services.
           It's a first look — a gentle "here's what's possible," not a finished redesign.
         </p>
       </section>

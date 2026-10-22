@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { FunnelProvider } from './useFunnelState';
@@ -75,6 +75,20 @@ describe('LandingPage', () => {
     expect(intro.textContent).toContain('$9 Room Pass');
     expect(intro.textContent).toContain('up to 4 looks over 10 days');
     expect(intro.textContent).toContain('15% off her services');
+  });
+
+  it('uses singular "1 look" when the pass has no extra restyles', async () => {
+    (fetchAppConfig as ReturnType<typeof vi.fn>).mockResolvedValue({ ...DEFAULT_CONFIG, passRestyles: 0 });
+    renderLanding();
+    await screen.findByRole('button', { name: 'Get your Room Pass — $5' });
+    const intro = screen.getByText(/Upload one photo of your space/);
+    expect(intro.textContent).toContain('in 1 look over 7 days');
+  });
+
+  it('keeps plural looks for 2 total', async () => {
+    (fetchAppConfig as ReturnType<typeof vi.fn>).mockResolvedValue({ ...DEFAULT_CONFIG, passRestyles: 1 });
+    renderLanding();
+    await waitFor(() => expect(screen.getByText(/Upload one photo of your space/).textContent).toContain('up to 2 looks over'));
   });
 
   it('keeps default copy when the config fetch fails', async () => {

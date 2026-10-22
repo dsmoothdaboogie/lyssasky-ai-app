@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { apiAdminMarkPerkRedeemed, apiAdminRestoreRestyle, apiRegenerate, fetchAllStyles, fetchLead, getImageUrl } from '../firebase/api';
-import { INTEREST_LABELS } from '../domain/pass';
+import { INTEREST_LABELS, isPassExpired } from '../domain/pass';
 import { DEFAULT_CONFIG } from '../config/defaultConfig';
 import type { Lead, LeadStatus, QuestionnaireAnswers } from '../domain/types';
 
@@ -252,7 +252,7 @@ export function LeadCardPage() {
             {lead.pass.restylesUsed} of {lead.pass.restylesTotal} restyles used · ends{' '}
             {formatTimestamp(lead.pass.expiresAt)}
           </p>
-          {lead.pass.restylesUsed > 0 && (
+          {lead.pass.restylesUsed > 0 && !isPassExpired(lead, Date.now()) && (
             <Button
               disabled={restoring}
               onClick={async () => {

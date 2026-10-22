@@ -241,7 +241,9 @@ export function ResultStep() {
     );
   }
 
-  const bookPath = actToken ? `/book?lead=${leadId}&token=${actToken}` : `/book?lead=${leadId}`;
+  const bookPath = actToken
+    ? `/book?lead=${encodeURIComponent(leadId)}&token=${encodeURIComponent(actToken)}`
+    : `/book?lead=${encodeURIComponent(leadId)}`;
   const reload = async (): Promise<View | null> =>
     actToken ? loadTokenView(leadId, actToken) : (await loadOwnedView(leadId))?.view ?? null;
 

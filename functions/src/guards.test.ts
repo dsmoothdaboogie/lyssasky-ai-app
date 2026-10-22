@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { assertAdmin, assertOwnerOrToken } from './guards';
+import { assertAdmin, assertOwnerOrToken, tokenMatches } from './guards';
 describe('assertAdmin', () => {
   it('allows an admin', () => {
     expect(() => assertAdmin({ uid: 'a', token: { admin: true } } as any)).not.toThrow();
@@ -36,5 +36,25 @@ describe('assertOwnerOrToken', () => {
   });
   it('rejects when the lead has no token, even for an empty token', () => {
     expect(() => assertOwnerOrToken('other', { ownerUid: 'owner' } as any, '')).toThrow(/not your lead/);
+  });
+});
+
+describe('tokenMatches', () => {
+  const lead = { leadToken: 'tok-123' } as any;
+  it('is true for the exact token', () => {
+    expect(tokenMatches(lead, 'tok-123')).toBe(true);
+  });
+  it('is false for a wrong token of equal or different length', () => {
+    expect(tokenMatches(lead, 'tok-124')).toBe(false);
+    expect(tokenMatches(lead, 'tok')).toBe(false);
+  });
+  it('is false for missing, empty or non-string tokens', () => {
+    expect(tokenMatches(lead)).toBe(false);
+    expect(tokenMatches(lead, '')).toBe(false);
+    expect(tokenMatches(lead, 123)).toBe(false);
+  });
+  it('is false when the lead is missing or has no token', () => {
+    expect(tokenMatches(undefined, 'tok-123')).toBe(false);
+    expect(tokenMatches({} as any, '')).toBe(false);
   });
 });

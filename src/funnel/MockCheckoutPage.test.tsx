@@ -87,6 +87,20 @@ describe('MockCheckoutPage', () => {
     expect(screen.getByText('10% off Virtual Styling or Room Refresh')).toBeInTheDocument();
   });
 
+  it('says "1 more look" when passRestyles is 1', async () => {
+    (fetchAppConfig as ReturnType<typeof vi.fn>).mockResolvedValue({ ...DEFAULT_CONFIG, passRestyles: 1 });
+    renderMockCheckout();
+    expect(await screen.findByText('Your first restyle preview, plus 1 more look')).toBeInTheDocument();
+  });
+
+  it('omits the extra-looks bullet when passRestyles is 0', async () => {
+    (fetchAppConfig as ReturnType<typeof vi.fn>).mockResolvedValue({ ...DEFAULT_CONFIG, passRestyles: 0, passDays: 10 });
+    renderMockCheckout();
+    expect(await screen.findByText('10 days to explore styles and moods')).toBeInTheDocument();
+    expect(screen.queryByText(/more look/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Your first restyle preview/)).not.toBeInTheDocument();
+  });
+
   it('follows non-default pass settings', async () => {
     (fetchAppConfig as ReturnType<typeof vi.fn>).mockResolvedValue({
       ...DEFAULT_CONFIG, priceCents: 900, passRestyles: 3, passDays: 10, perkDiscountPct: 15,

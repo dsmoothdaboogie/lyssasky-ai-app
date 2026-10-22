@@ -90,7 +90,11 @@ export function MockCheckoutPage() {
           <p style={{ fontWeight: 600, marginBottom: 'var(--space-2)' }}>Room Pass</p>
           <p style={{ fontSize: '1.5rem', margin: 0 }}>{formatPrice(config.priceCents)} {config.currency}</p>
           <ul className="text-muted" style={{ marginTop: 'var(--space-2)', paddingLeft: '1.2em' }}>
-            <li>Your first restyle preview, plus up to {config.passRestyles} more looks</li>
+            {config.passRestyles > 0 && (
+              <li>
+                Your first restyle preview, plus {config.passRestyles === 1 ? '1 more look' : `up to ${config.passRestyles} more looks`}
+              </li>
+            )}
             <li>{config.passDays} days to explore styles and moods</li>
             <li>A free 15-min chat with Marjorie</li>
             <li>{config.perkDiscountPct}% off Virtual Styling or Room Refresh</li>

@@ -281,6 +281,14 @@ describe('ResultStep', () => {
     expect(screen.queryByText(/device you started on/)).not.toBeInTheDocument();
   });
 
+  it('encodes lead and token in the booking link', async () => {
+    vi.mocked(fetchLead).mockRejectedValue(new Error('permission-denied'));
+    vi.mocked(apiGetResultByToken).mockResolvedValue(tokenResult());
+    renderResultStep('/result?lead=l1&token=a%2Bb%26c%3Dd');
+    const link = await screen.findByRole('link', { name: /Book your free 15-min chat/ });
+    expect(link).toHaveAttribute('href', '/book?lead=l1&token=a%2Bb%26c%3Dd');
+  });
+
   it('token-authorized restyle passes the token and refreshes via apiGetResultByToken', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     vi.mocked(fetchLead).mockRejectedValue(new Error('permission-denied'));
