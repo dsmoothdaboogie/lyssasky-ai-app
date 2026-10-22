@@ -1,4 +1,11 @@
-import type { AppConfig, Lead, LeadPass, LeadPerk, Look } from './types';
+import type { AppConfig, BookingInterest, Lead, LeadPass, LeadPerk, Look } from './types';
+
+export const BOOKING_INTERESTS: readonly BookingInterest[] = ['chat', 'virtual_styling', 'room_refresh'];
+export const INTEREST_LABELS: Record<BookingInterest, string> = {
+  chat: 'Free 15-min chat',
+  virtual_styling: 'Virtual Styling (from $250/room)',
+  room_refresh: 'Room Refresh (from $650/room, local)',
+};
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 /** A restyle marker older than this is treated as abandoned (crashed function). */

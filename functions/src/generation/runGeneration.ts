@@ -4,7 +4,8 @@ import { db } from '../admin';
 import { buildGenerationPrompt } from '../../../src/domain/prompt';
 import { assertTransition } from '../../../src/domain/leadStatus';
 import { logEventDoc } from '../events';
-import { sendEmailDoc, escapeHtml } from '../email/sendEmail';
+import { sendEmailDoc } from '../email/sendEmail';
+import { renderResultReadyHtml, resultUrlFor } from '../email/templates';
 import { generateImage } from './generateImage';
 import type { GenerationProvider } from './provider';
 import type { Lead, Look, QuestionnaireAnswers, Style, StyleRecipe, GenerationRecord } from '../../../src/domain/types';
@@ -26,12 +27,7 @@ async function sendResultReadyEmail(leadId: string, lead: Lead): Promise<void> {
   if (!lead.email) return;
   try {
     const appBaseUrl = process.env.APP_BASE_URL ?? 'http://localhost:5173';
-    const resultUrl = `${appBaseUrl}/result?lead=${encodeURIComponent(leadId)}&token=${encodeURIComponent(lead.leadToken)}`;
-    const html = `
-      <h2>Your room preview is ready! ✨</h2>
-      <p>Marjorie's AI stylist has finished reimagining your space. Take a look:</p>
-      <p><a href="${resultUrl}">${escapeHtml(resultUrl)}</a></p>
-    `.trim();
+    const html = renderResultReadyHtml(lead, resultUrlFor(leadId, lead, appBaseUrl));
     await sendEmailDoc({
       to: lead.email,
       subject: 'Your room preview is ready ✨',

@@ -70,6 +70,19 @@ describe('submitBookingDoc', () => {
     await expect(submitBookingDoc('does-not-exist', 'u', { name: 'X' }))
       .rejects.toThrow(/not.?found/i);
   });
+
+  it('saves a valid interest', async () => {
+    const leadId = await seedGeneratedLead('owner-int');
+    await submitBookingDoc(leadId, 'owner-int', { name: 'Jane', interest: 'room_refresh' });
+    const lead = (await db.collection('leads').doc(leadId).get()).data()!;
+    expect(lead.booking.interest).toBe('room_refresh');
+  });
+
+  it('rejects an unknown interest', async () => {
+    const leadId = await seedGeneratedLead('owner-int2');
+    await expect(submitBookingDoc(leadId, 'owner-int2', { name: 'Jane', interest: 'yacht' as never }))
+      .rejects.toThrow(/interest/i);
+  });
 });
 
 async function seedStyle() {

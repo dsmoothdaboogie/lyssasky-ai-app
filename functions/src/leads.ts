@@ -5,6 +5,7 @@ import { assertOwner } from './guards';
 import { assertTransition } from '../../src/domain/leadStatus';
 import { logEventDoc } from './events';
 import { runGeneration } from './generation/runGeneration';
+import { BOOKING_INTERESTS } from '../../src/domain/pass';
 import type { Lead, QuestionnaireAnswers } from '../../src/domain/types';
 
 export async function createLeadDoc(ownerUid: string) {
@@ -89,12 +90,15 @@ export const submitFeedback = onCall(async (req) => {
 export async function submitBookingDoc(
   leadId: string,
   uid: string,
-  booking: { name: string; phone?: string; note?: string }
+  booking: NonNullable<Lead['booking']>
 ): Promise<void> {
   const ref = db.collection('leads').doc(leadId);
   const lead = (await ref.get()).data() as Lead | undefined;
   if (!lead) throw new HttpsError('not-found', 'Lead not found');
   assertOwner(uid, lead);
+  if (booking.interest !== undefined && !BOOKING_INTERESTS.includes(booking.interest)) {
+    throw new HttpsError('invalid-argument', 'Unknown booking interest');
+  }
   assertTransition(lead.status, 'booked');
   const now = Date.now();
   await ref.update({ booking, status: 'booked', 'timestamps.booked': now, updatedAt: now });

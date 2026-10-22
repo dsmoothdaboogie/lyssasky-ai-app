@@ -1,7 +1,8 @@
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { db } from '../admin';
 import { loadConfig } from '../config';
-import type { Lead, MailDocument } from '../../../src/domain/types';
+import { escapeHtml, renderBookingHtml, type EmailLabels } from './templates';
+import type { Lead, MailDocument, Style } from '../../../src/domain/types';
 
 /**
  * Writes a document to the `mail` collection in the exact shape the Firebase
@@ -26,49 +27,15 @@ export async function sendEmailDoc(input: {
   });
 }
 
-/**
- * Escapes HTML-significant characters in a value before it is interpolated
- * into the booking notification email. All of the values rendered by
- * `renderBookingHtml` originate from customer-controlled free text (lead
- * email, questionnaire answers, feedback, booking details), and at go-live
- * the Trigger Email extension sends this HTML as real mail — so without
- * escaping, a customer could inject markup (e.g. `<a href="...">`,
- * `<img onerror=...>`) into Marjorie's inbox.
- */
-export function escapeHtml(v: unknown): string {
-  if (v === null || v === undefined) return '';
-  return String(v)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
+export { escapeHtml };
 
-function renderBookingHtml(leadId: string, lead: Lead): string {
-  const appBaseUrl = process.env.APP_BASE_URL ?? 'http://localhost:5173';
-  const leadUrl = `${appBaseUrl}/admin/leads/${leadId}`;
-  const answersList = lead.answers
-    ? Object.entries(lead.answers)
-        .map(([key, value]) => `<li><strong>${escapeHtml(key)}:</strong> ${escapeHtml(value)}</li>`)
-        .join('')
-    : '<li>No questionnaire answers on file</li>';
-  const booking = lead.booking;
-
-  return `
-    <h2>New booking from ${lead.email ? escapeHtml(lead.email) : 'unknown customer'}</h2>
-    <p><strong>Customer email:</strong> ${lead.email ? escapeHtml(lead.email) : 'n/a'}</p>
-    <h3>Questionnaire answers</h3>
-    <ul>${answersList}</ul>
-    <h3>Feedback on the design</h3>
-    <p><strong>Rating:</strong> ${lead.rating !== undefined && lead.rating !== null ? escapeHtml(lead.rating) : 'n/a'}</p>
-    <p><strong>What would you change:</strong> ${lead.feedback ? escapeHtml(lead.feedback) : 'n/a'}</p>
-    <h3>Booking details</h3>
-    <p><strong>Name:</strong> ${booking?.name ? escapeHtml(booking.name) : 'n/a'}</p>
-    <p><strong>Phone:</strong> ${booking?.phone ? escapeHtml(booking.phone) : 'n/a'}</p>
-    <p><strong>Note:</strong> ${booking?.note ? escapeHtml(booking.note) : 'n/a'}</p>
-    <p><a href="${leadUrl}">${leadUrl}</a></p>
-  `.trim();
+export async function loadEmailLabels(): Promise<EmailLabels> {
+  const [stylesSnap, config] = await Promise.all([db.collection('styles').get(), loadConfig()]);
+  const names = new Map(stylesSnap.docs.map((d) => [(d.data() as Style).slug, (d.data() as Style).name]));
+  const moods = new Map(
+    (config.questionnaire.find((q) => q.id === 'colorMood')?.options ?? []).map((o) => [o.value, o.label]),
+  );
+  return { styleName: (s) => names.get(s) ?? s, moodLabel: (v) => moods.get(v) ?? v };
 }
 
 /**
@@ -102,7 +69,8 @@ export async function handleLeadBooked(leadId: string): Promise<void> {
   if (!lead) return;
 
   const config = await loadConfig();
-  const html = renderBookingHtml(leadId, lead);
+  const appBaseUrl = process.env.APP_BASE_URL ?? 'http://localhost:5173';
+  const html = renderBookingHtml(leadId, lead, appBaseUrl, await loadEmailLabels());
   await sendEmailDoc({
     to: config.notifyEmail,
     subject: `New booking from ${lead.email ?? 'a customer'}`,
