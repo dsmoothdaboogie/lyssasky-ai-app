@@ -1,13 +1,51 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FunnelLayout } from './FunnelLayout';
 import { Button } from '../components/Button';
+import { StylePicker } from './StylePicker';
 import { useFunnelState } from './useFunnelState';
-import { fetchLead, getImageUrl, apiSubmitFeedback, apiRegenerate, apiGetResultByToken } from '../firebase/api';
+import {
+  fetchLead, getImageUrl, apiSubmitFeedback, apiRestyle, apiGetResultByToken,
+  fetchActiveStyles, fetchAppConfig,
+} from '../firebase/api';
 import { ensureAnonymousAuth } from '../firebase/client';
+import { isPassExpired, isPerkValid, restylesLeft } from '../domain/pass';
+import type { LeadPass, LeadPerk, LeadStatus, Style, QuestionOption } from '../domain/types';
 
 const GENERIC_ERROR = "Something went wrong on our end — please try again in a moment.";
 const RATINGS = [1, 2, 3, 4, 5];
+const shortDate = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'America/Toronto' });
+const fmt = (ms: number) => shortDate.format(new Date(ms));
+
+interface ViewLook { url: string; styleSlug?: string; colorMood?: string }
+interface View {
+  status: LeadStatus;
+  looks: ViewLook[];
+  pass: LeadPass | null;
+  perk: LeadPerk | null;
+}
+
+/** Normalizes an owned lead into the same shape the token callable returns. */
+async function loadOwnedView(leadId: string): Promise<{ view: View; originalPath?: string } | null> {
+  const lead = await fetchLead(leadId);
+  if (!lead || lead.generatedImagePaths.length === 0) return null;
+  const source = lead.looks?.length
+    ? lead.looks
+    : lead.generatedImagePaths.map((imagePath) => ({ imagePath, styleSlug: undefined, colorMood: undefined }));
+  const looks = await Promise.all(
+    source.map(async (l) => ({ url: await getImageUrl(l.imagePath), styleSlug: l.styleSlug, colorMood: l.colorMood })),
+  );
+  return {
+    view: { status: lead.status, looks, pass: lead.pass ?? null, perk: lead.perk ?? null },
+    originalPath: lead.originalPhotoPath,
+  };
+}
+
+function errorMessage(err: unknown): string {
+  // HttpsError messages from `restyle` are written for customers.
+  const code = (err as { code?: string } | null)?.code ?? '';
+  return code.startsWith('functions/') && err instanceof Error && err.message ? err.message : GENERIC_ERROR;
+}
 
 /**
  * Reached three ways:
@@ -22,9 +60,10 @@ const RATINGS = [1, 2, 3, 4, 5];
  *     fresh uid), so `fetchLead` would be denied by firestore.rules. Instead
  *     this reads via the public `getResultByToken` callable, which trusts
  *     the opaque `leadToken` as the credential. Since this path can't prove
- *     ownership, it's read-only: rating/feedback/regenerate are all
+ *     ownership, it's read-only: rating/feedback/restyle are all
  *     owner-guarded callables server-side, so those controls are hidden here
- *     rather than shown and left to fail.
+ *     rather than shown and left to fail. It still shows the looks strip and
+ *     the Marjorie perk.
  *
  * Generation is already done by the time this page loads, so a one-shot
  * fetch is enough in every case (no need for the realtime `watchLead`
@@ -32,8 +71,7 @@ const RATINGS = [1, 2, 3, 4, 5];
  */
 export function ResultStep() {
   const [searchParams] = useSearchParams();
-  const { leadId: stateLeadId, setLeadId, originalPhotoPreviewUrl, regenerateUsed, setRegenerateUsed } =
-    useFunnelState();
+  const { leadId: stateLeadId, setLeadId, originalPhotoPreviewUrl } = useFunnelState();
   const navigate = useNavigate();
 
   const urlLeadId = searchParams.get('lead');
@@ -45,16 +83,21 @@ export function ResultStep() {
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [afterUrl, setAfterUrl] = useState<string | null>(null);
+  const [view, setView] = useState<View | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [beforeUrl, setBeforeUrl] = useState<string | null>(originalPhotoPreviewUrl);
+
+  const [styles, setStyles] = useState<Style[]>([]);
+  const [moods, setMoods] = useState<QuestionOption[]>([]);
 
   const [rating, setRating] = useState<number | null>(null);
   const [feedback, setFeedback] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const [regenerating, setRegenerating] = useState(false);
-  const [regenerateError, setRegenerateError] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [restyling, setRestyling] = useState(false);
+  const [restyleError, setRestyleError] = useState<string | null>(null);
 
   const mountedRef = useRef(true);
 
@@ -63,6 +106,11 @@ export function ResultStep() {
     return () => {
       mountedRef.current = false;
     };
+  }, []);
+
+  const applyView = useCallback((v: View) => {
+    setView(v);
+    setCurrentIndex(v.looks.length - 1);
   }, []);
 
   useEffect(() => {
@@ -74,47 +122,55 @@ export function ResultStep() {
       try {
         await ensureAnonymousAuth();
 
+        // Labels for looks (style names, mood labels) — best-effort.
+        Promise.all([fetchActiveStyles(), fetchAppConfig()])
+          .then(([s, cfg]) => {
+            if (cancelled || !mountedRef.current) return;
+            setStyles(s);
+            setMoods(cfg.questionnaire.find((q) => q.id === 'colorMood')?.options ?? []);
+          })
+          .catch(() => {});
+
         if (tokenMode && token) {
           // Emailed cross-device link: this uid doesn't own the lead, so read
           // via the token-authenticated callable instead of fetchLead. It
-          // returns already-resolved download URLs (resolved server-side
-          // with the Admin SDK, since this uid can't resolve
+          // returns already-resolved download URLs (resolved server-side with
+          // the Admin SDK, since this uid can't resolve
           // `leads/{ownerUid}/generated/*` paths itself via getImageUrl) —
           // no before photo, and nothing to claim into funnel state, since
           // this view is read-only.
           const result = await apiGetResultByToken(leadId, token);
           if (cancelled || !mountedRef.current) return;
 
-          if (result.imageUrls.length === 0) {
+          const looks: ViewLook[] = result.looks.length
+            ? result.looks
+            : result.imageUrls.map((url) => ({ url }));
+          if (looks.length === 0) {
             setLoadError("We couldn't find your finished design just yet — please try again shortly.");
             setLoading(false);
             return;
           }
 
-          setAfterUrl(result.imageUrls[result.imageUrls.length - 1]);
+          applyView({ status: result.status, looks, pass: result.pass, perk: result.perk });
           setLoading(false);
           return;
         }
 
-        const lead = await fetchLead(leadId);
+        const ownedView = await loadOwnedView(leadId);
         if (cancelled || !mountedRef.current) return;
 
-        if (!lead || lead.generatedImagePaths.length === 0) {
+        if (!ownedView) {
           setLoadError("We couldn't find your finished design just yet — please try again shortly.");
           setLoading(false);
           return;
         }
 
         setLeadId(leadId);
+        applyView(ownedView.view);
 
-        const newestPath = lead.generatedImagePaths[lead.generatedImagePaths.length - 1];
-        const url = await getImageUrl(newestPath);
-        if (cancelled || !mountedRef.current) return;
-        setAfterUrl(url);
-
-        if (!originalPhotoPreviewUrl && lead.originalPhotoPath) {
+        if (!originalPhotoPreviewUrl && ownedView.originalPath) {
           try {
-            const before = await getImageUrl(lead.originalPhotoPath);
+            const before = await getImageUrl(ownedView.originalPath);
             if (!cancelled && mountedRef.current) setBeforeUrl(before);
           } catch {
             // Before photo is a nice-to-have — don't block the reveal on it.
@@ -134,6 +190,13 @@ export function ResultStep() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadId, tokenMode, token]);
+
+  const styleName = useMemo(() => new Map(styles.map((s) => [s.slug, s.name])), [styles]);
+  const moodLabel = useMemo(() => new Map(moods.map((m) => [m.value, m.label])), [moods]);
+  const labelOf = (l: ViewLook) =>
+    l.styleSlug && l.colorMood
+      ? `${styleName.get(l.styleSlug) ?? l.styleSlug} · ${moodLabel.get(l.colorMood) ?? l.colorMood}`
+      : null;
 
   if (!leadId) {
     return (
@@ -165,21 +228,20 @@ export function ResultStep() {
     }
   };
 
-  const handleRegenerate = async () => {
-    setRegenerateError(null);
-    setRegenerating(true);
-    // A paying customer gets exactly one free re-generate, win or lose — so
-    // mark it used before the call, not just on success.
-    setRegenerateUsed(true);
+  const handleRestyle = async (styleSlug: string, colorMood: string) => {
+    setRestyleError(null);
+    setRestyling(true);
     try {
-      await apiRegenerate(leadId);
+      await apiRestyle(leadId, styleSlug, colorMood);
+      const refreshed = await loadOwnedView(leadId);
       if (!mountedRef.current) return;
-      navigate(`/wait?lead=${leadId}`);
-    } catch {
+      if (refreshed) applyView(refreshed.view);
+      setPickerOpen(false);
+    } catch (err) {
       if (!mountedRef.current) return;
-      setRegenerateError(GENERIC_ERROR);
+      setRestyleError(errorMessage(err));
     } finally {
-      if (mountedRef.current) setRegenerating(false);
+      if (mountedRef.current) setRestyling(false);
     }
   };
 
@@ -191,15 +253,34 @@ export function ResultStep() {
     );
   }
 
-  if (loadError) {
+  if (loadError || !view) {
     return (
       <FunnelLayout>
         <section>
           <h1>Almost there</h1>
-          <p role="alert">{loadError}</p>
+          <p role="alert">{loadError ?? GENERIC_ERROR}</p>
         </section>
       </FunnelLayout>
     );
+  }
+
+  const now = Date.now();
+  const current = view.looks[currentIndex];
+  const currentLabel = labelOf(current);
+  const afterUrl = current.url;
+  const hasPass = view.pass !== null;
+  const left = view.pass ? restylesLeft({ pass: view.pass }) : 0;
+  const expired = view.pass !== null && isPassExpired({ pass: view.pass }, now);
+  const passOpen = view.pass !== null && !expired && left > 0;
+  const showPerk = view.perk !== null && isPerkValid({ perk: view.perk }, now);
+  const tried = new Set(view.looks.map((l) => l.styleSlug).filter((s): s is string => !!s));
+  const lookCount = view.looks.length;
+
+  let passStatus = '';
+  if (view.pass) {
+    if (expired) passStatus = 'Room Pass ended';
+    else if (left === 0) passStatus = `No restyles left · ends ${fmt(view.pass.expiresAt)}`;
+    else passStatus = `${left} restyle${left === 1 ? '' : 's'} left · ends ${fmt(view.pass.expiresAt)}`;
   }
 
   return (
@@ -255,7 +336,91 @@ export function ResultStep() {
           />
         )}
 
-        {owned && (
+        {currentLabel && <p style={{ textAlign: 'center', fontWeight: 600 }}>{currentLabel}</p>}
+
+        {lookCount > 1 && (
+          <div aria-label="Your looks" role="group" style={{ marginBottom: 'var(--space-4)' }}>
+            <h2>Your looks</h2>
+            <div style={{ display: 'flex', gap: 'var(--space-2)', overflowX: 'auto' }}>
+              {view.looks.map((l, i) => (
+                <button
+                  key={l.url}
+                  type="button"
+                  aria-pressed={i === currentIndex}
+                  aria-label={`Look ${i + 1}${labelOf(l) ? `: ${labelOf(l)}` : ''}`}
+                  onClick={() => setCurrentIndex(i)}
+                  style={{
+                    padding: 0, flex: '0 0 72px', borderRadius: 'var(--radius-sm)',
+                    border: i === currentIndex ? '2px solid var(--color-accent)' : '1px solid var(--color-border)',
+                  }}
+                >
+                  <img src={l.url} alt="" style={{ width: '72px', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {hasPass && (
+          <p className="text-muted" style={{ textAlign: 'center' }}>{passStatus}</p>
+        )}
+
+        {owned && passOpen && !pickerOpen && (
+          <Button variant="secondary" onClick={() => setPickerOpen(true)} style={{ width: '100%' }}>
+            Try another look
+          </Button>
+        )}
+
+        {owned && passOpen && pickerOpen && (
+          <div className="card" style={{ padding: 'var(--space-4)', marginTop: 'var(--space-3)' }}>
+            {restyling ? (
+              <div style={{ textAlign: 'center' }}>
+                <div className="wait-animation" aria-hidden="true">
+                  <span className="wait-pulse" />
+                  <span className="wait-pulse wait-pulse-delay" />
+                </div>
+                <p role="status">Styling your new look…</p>
+              </div>
+            ) : (
+              <StylePicker
+                styles={styles.map((s) => ({ slug: s.slug, name: s.name, imageUrl: s.galleryImages[0] }))}
+                moods={moods}
+                triedStyles={tried}
+                busy={restyling}
+                onSubmit={(s, m) => void handleRestyle(s, m)}
+              />
+            )}
+            {restyleError && <p role="alert" style={{ marginTop: 'var(--space-3)' }}>{restyleError}</p>}
+          </div>
+        )}
+
+        {owned && hasPass && !passOpen && (
+          <div style={{ marginTop: 'var(--space-4)', textAlign: 'center' }}>
+            <p>
+              You've explored {lookCount} look{lookCount === 1 ? '' : 's'} — next step: talk them through with Marjorie.
+            </p>
+            <Link to="/" className="text-muted">Start a new Room Pass</Link>
+          </div>
+        )}
+
+        {(hasPass || showPerk) && (
+          <div className="card" style={{ padding: 'var(--space-4)', marginTop: 'var(--space-5)' }}>
+            <h2>Make it real with Marjorie</h2>
+            {owned && (
+              <Link to={`/book?lead=${leadId}`} className="btn btn-primary" style={{ display: 'block', textAlign: 'center' }}>
+                Book your free 15-min chat — Marjorie will have your looks ready
+              </Link>
+            )}
+            {showPerk && (
+              <p style={{ marginTop: 'var(--space-3)' }}>
+                {view.perk!.discountPct}% off Virtual Styling (from $250) or Room Refresh (from $650) — code{' '}
+                <strong>{view.perk!.code}</strong>, valid until {fmt(view.perk!.validUntil)}
+              </p>
+            )}
+          </div>
+        )}
+
+        {owned && view.status === 'generated' && (
           <>
             <h2>How close is this to your vision?</h2>
             <div
@@ -301,40 +466,13 @@ export function ResultStep() {
             >
               {submitting ? 'Submitting…' : 'Continue'}
             </Button>
-
-            {!regenerateUsed && (
-              <div style={{ marginTop: 'var(--space-5)', textAlign: 'center' }}>
-                <p className="text-muted" style={{ marginBottom: 'var(--space-2)' }}>
-                  Not quite right? You get one free re-generate.
-                </p>
-                <Button
-                  variant="secondary"
-                  onClick={handleRegenerate}
-                  disabled={regenerating}
-                  style={{ width: '100%' }}
-                >
-                  {regenerating ? 'Starting over…' : 'Try another version'}
-                </Button>
-                {regenerateError && (
-                  <p role="alert" style={{ marginTop: 'var(--space-3)' }}>
-                    {regenerateError}
-                  </p>
-                )}
-              </div>
-            )}
-            {regenerateUsed && (
-              <p className="text-muted" style={{ marginTop: 'var(--space-5)', textAlign: 'center' }}>
-                You've used your free re-generate — Marjorie can refine things further after you
-                connect.
-              </p>
-            )}
           </>
         )}
 
         {!owned && (
           <p className="text-muted" style={{ marginTop: 'var(--space-5)', textAlign: 'center' }}>
-            This is your emailed preview link — open it on the device you started on to rate it
-            or book a consult.
+            This is your emailed preview link — open it on the device you started on to rate it,
+            try more looks, or book a consult.
           </p>
         )}
       </section>

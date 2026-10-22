@@ -118,6 +118,18 @@ export async function apiRegenerate(leadId: string): Promise<Ok> {
   return res.data;
 }
 
+export async function apiRestyle(
+  leadId: string,
+  styleSlug: string,
+  colorMood: string,
+): Promise<{ imagePath: string; restylesLeft: number }> {
+  const fn = httpsCallable<
+    { leadId: string; styleSlug: string; colorMood: string },
+    { imagePath: string; restylesLeft: number }
+  >(functions, 'restyle');
+  return (await fn({ leadId, styleSlug, colorMood })).data;
+}
+
 export async function apiLogEvent(
   type: AnalyticsEventType,
   leadId?: string,
