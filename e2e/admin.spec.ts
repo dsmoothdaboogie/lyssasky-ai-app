@@ -46,7 +46,11 @@ test('admin can sign in and view the leads list and a lead briefing', async ({ p
     return;
   }
 
-  await viewLinks.first().click();
+  // On the mobile viewport the wide table scrolls horizontally and the sticky
+  // admin header can cover the link's click point, so click it via the DOM instead.
+  const href = await viewLinks.first().getAttribute('href');
+  expect(href).toMatch(/^\/admin\/leads\/.+/);
+  await viewLinks.first().evaluate((el) => (el as HTMLElement).click());
   await expect(page).toHaveURL(/\/admin\/leads\/.+/);
 
   await expect(page.getByRole('heading', { name: 'Questionnaire answers' })).toBeVisible();

@@ -28,15 +28,36 @@ real Gemini generation later behind a single config flag (see
 5. **Checkout** → payment ($5, mocked by default). On confirmation the lead
    transitions to `paid`, which triggers generation server-side.
 6. **Wait / Result** → the client watches the lead document for the
-   generated preview image and shows it with a before/after comparison.
+   generated preview image and shows it with a before/after comparison, the
+   pass status ("N restyles left · ends …") and the perk code. The customer
+   can restyle the same photo with a new style + mood until the pass runs out;
+   a looks strip keeps every look.
 7. **Rate** → customer rates the result (1–5).
-8. **Book** → customer is invited to book a full consultation with Marjorie
-   (Calendly link).
+8. **Book** → customer is invited to book a free 15-minute chat with Marjorie
+   (Calendly link), choosing what they're interested in; the booking step
+   shows the perk code.
 
 Every step is backed by a `leads` document whose `status` moves through a
 strict state machine (`captured → paid → generated → rated → booked`, plus
 `failed`/retry paths — see `src/domain/leadStatus.ts`), and an `events`
 subcollection records a timeline for the admin briefing card.
+
+## Room Pass
+
+The $5 purchase is a **Room Pass** (one room, `passDays` = 7 days): the first
+preview plus up to `passRestyles` = 5 restyles. A restyle picks a new style +
+color mood on the same photo (`restyle` callable, `functions/src/restyle.ts`);
+failed restyles are refunded. Previews get a corner watermark
+(`functions/src/generation/watermark.ts`; asset regenerated with
+`npx tsx functions/scripts/makeWatermark.ts`). Each pass carries a perk code
+(`ROOM-XXXX`, 10% off Virtual Styling / Room Refresh for `perkDays` = 30 days)
+shown on the result page, the booking step and every email; Marjorie marks it
+redeemed on `/admin/leads/:id`. An hourly scheduled function
+(`passReminderSchedule`) queues a "pass ends tomorrow" email — scheduled
+functions don't fire in the emulator; the handler is integration-tested.
+All four numbers are editable at `/admin/config` and are snapshotted onto each
+lead at payment. `npm run seed` also writes sample leads in every pass state
+(`sample-*`).
 
 ## Tech stack
 
