@@ -10,7 +10,9 @@ const NOW = Date.UTC(2030, 0, 1); // far future so no other test's leads match
 async function seed(owner: string, o: Partial<Lead>) {
   const { leadId } = await createLeadDoc(owner);
   await db.collection('leads').doc(leadId).update({
-    status: 'generated', email: `${owner}@example.com`, looks: [],
+    status: 'generated', email: `${owner}@example.com`,
+    looks: [{ imagePath: 'a.png', styleSlug: 'scandi', colorMood: 'warm_cozy', createdAt: 1 }],
+    timestamps: { paid: NOW - 2 * DAY_MS },
     pass: { restylesTotal: 5, restylesUsed: 0, expiresAt: NOW + 12 * 60 * 60 * 1000 },
     perk: { code: 'ROOM-REMD', discountPct: 10, validUntil: NOW + 30 * DAY_MS },
     ...o,
@@ -41,5 +43,15 @@ describe('sendPassReminders', () => {
     const later = await seed('rem5', { pass: { restylesTotal: 5, restylesUsed: 0, expiresAt: NOW + 3 * DAY_MS } });
     await sendPassReminders(NOW);
     for (const id of [booked, noEmail, expired, later]) expect(await mailFor(id)).toBe(0);
+  });
+
+  it('skips leads with no looks and leads that paid less than 24h ago', async () => {
+    const noLooks = await seed('rem6', { looks: [] });
+    const justPaid = await seed('rem7', { timestamps: { paid: NOW - 60 * 60 * 1000 } });
+    await sendPassReminders(NOW);
+    for (const id of [noLooks, justPaid]) {
+      expect(await mailFor(id)).toBe(0);
+      expect((await db.collection('leads').doc(id).get()).data()!.remindedAt).toBeUndefined();
+    }
   });
 });

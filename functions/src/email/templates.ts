@@ -38,8 +38,10 @@ const lookLabel = (l: { styleSlug: string; colorMood: string }, labels: EmailLab
   `${labels.styleName(l.styleSlug)} · ${labels.moodLabel(l.colorMood)}`;
 
 export function renderResultReadyHtml(lead: Lead, resultUrl: string): string {
+  const left = lead.pass ? restylesLeft(lead) : 0;
+  const leftText = left === 0 ? 'no restyles' : `${left} restyle${left === 1 ? '' : 's'}`;
   const passLine = lead.pass
-    ? `<p>You have <strong>${restylesLeft(lead)} restyles</strong> left to try other styles and moods, until ${escapeHtml(formatDate(lead.pass.expiresAt))}.</p>`
+    ? `<p>You have <strong>${leftText}</strong> left to try other styles and moods, until ${escapeHtml(formatDate(lead.pass.expiresAt))}.</p>`
     : '';
   return `
     <h2>Your room preview is ready! ✨</h2>
@@ -70,7 +72,7 @@ export function renderBookingHtml(leadId: string, lead: Lead, appBaseUrl: string
         .join('')
     : '<li>No questionnaire answers on file</li>';
   const booking = lead.booking;
-  const interest = booking?.interest ? INTEREST_LABELS[booking.interest] : 'n/a';
+  const interest = booking?.interest ? (INTEREST_LABELS[booking.interest] ?? 'n/a') : 'n/a';
   const perk = lead.perk
     ? `<p><strong>Room Pass holder</strong> — ${escapeHtml(lead.perk.discountPct)}% off with code <strong>${escapeHtml(lead.perk.code)}</strong>, valid until ${escapeHtml(formatDate(lead.perk.validUntil))}${lead.perk.redeemedAt ? ' (already redeemed)' : ''}.</p>`
     : '';

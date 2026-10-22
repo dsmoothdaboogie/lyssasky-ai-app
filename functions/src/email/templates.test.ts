@@ -34,6 +34,19 @@ describe('templates', () => {
     expect(html).toContain('https://x.test/r');
   });
 
+  it('result-ready pluralizes restyles left', () => {
+    const one = renderResultReadyHtml({ ...lead, pass: { ...lead.pass!, restylesUsed: 4 } }, 'u');
+    expect(one).toContain('<strong>1 restyle</strong>');
+    expect(one).not.toContain('1 restyles');
+    const none = renderResultReadyHtml({ ...lead, pass: { ...lead.pass!, restylesUsed: 5 } }, 'u');
+    expect(none).toContain('<strong>no restyles</strong>');
+  });
+
+  it('booking email shows n/a for an unknown stored interest', () => {
+    const html = renderBookingHtml('l1', { ...lead, booking: { name: 'J', interest: 'bogus' as never } }, 'https://x.test', labels);
+    expect(html).toContain('<strong>Interested in:</strong> n/a');
+  });
+
   it('result-ready for a legacy lead (no pass) omits pass copy', () => {
     const html = renderResultReadyHtml({ ...lead, pass: undefined, perk: undefined }, 'u');
     expect(html).not.toContain('restyles');
