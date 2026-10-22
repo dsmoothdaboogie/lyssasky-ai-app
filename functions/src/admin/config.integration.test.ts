@@ -41,3 +41,25 @@ describe('admin config', () => {
     });
   });
 });
+
+describe('validateConfigPatch — Room Pass fields', () => {
+  it('accepts valid pass settings', () => {
+    expect(validateConfigPatch({ passRestyles: 5, passDays: 7, perkDiscountPct: 10, perkDays: 30 }))
+      .toEqual({ passRestyles: 5, passDays: 7, perkDiscountPct: 10, perkDays: 30 });
+  });
+  it('allows 0 restyles (preview-only pass)', () => {
+    expect(validateConfigPatch({ passRestyles: 0 })).toEqual({ passRestyles: 0 });
+  });
+  it.each([
+    [{ passRestyles: -1 }, /passRestyles/],
+    [{ passRestyles: 2.5 }, /passRestyles/],
+    [{ passRestyles: 51 }, /passRestyles/],
+    [{ passDays: 0 }, /passDays/],
+    [{ perkDays: 0 }, /perkDays/],
+    [{ perkDiscountPct: 101 }, /perkDiscountPct/],
+    [{ perkDiscountPct: -5 }, /perkDiscountPct/],
+    [{ passDays: '7' }, /passDays/],
+  ])('rejects %j', (patch, msg) => {
+    expect(() => validateConfigPatch(patch)).toThrow(msg);
+  });
+});

@@ -70,4 +70,27 @@ describe('ConfigPage', () => {
 
     expect(await screen.findByRole('alert')).toBeInTheDocument();
   });
+
+  test('edits Room Pass settings and saves them as integers', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const restyles = await screen.findByLabelText('Restyles per pass');
+    expect(restyles).toHaveValue(5);
+    expect(screen.getByLabelText('Pass length (days)')).toHaveValue(7);
+    expect(screen.getByLabelText('Perk discount (%)')).toHaveValue(10);
+    expect(screen.getByLabelText('Perk valid for (days)')).toHaveValue(30);
+
+    await user.clear(restyles);
+    await user.type(restyles, '3');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(mockedApiAdminUpdateConfig).toHaveBeenCalledTimes(1));
+    expect(mockedApiAdminUpdateConfig.mock.calls[0][0]).toMatchObject({
+      passRestyles: 3,
+      passDays: 7,
+      perkDiscountPct: 10,
+      perkDays: 30,
+    });
+  });
 });

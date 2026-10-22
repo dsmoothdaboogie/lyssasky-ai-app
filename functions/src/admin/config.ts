@@ -68,6 +68,13 @@ function validateFeatureFlags(v: unknown): Record<string, boolean> {
   return out;
 }
 
+function intInRange(v: unknown, field: string, min: number, max: number): number {
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) {
+    throw new HttpsError('invalid-argument', `Invalid ${field}: must be an integer from ${min} to ${max}`);
+  }
+  return v;
+}
+
 export function validateConfigPatch(patch: unknown): Partial<AppConfig> {
   if (typeof patch !== 'object' || patch === null) {
     throw new HttpsError('invalid-argument', 'Missing patch');
@@ -125,6 +132,10 @@ export function validateConfigPatch(patch: unknown): Partial<AppConfig> {
     }
     out.questionnaire = v.map((q, i) => validateQuestionDef(q, i));
   }
+  if ('passRestyles' in p) out.passRestyles = intInRange(p.passRestyles, 'passRestyles', 0, 50);
+  if ('passDays' in p) out.passDays = intInRange(p.passDays, 'passDays', 1, 90);
+  if ('perkDiscountPct' in p) out.perkDiscountPct = intInRange(p.perkDiscountPct, 'perkDiscountPct', 0, 100);
+  if ('perkDays' in p) out.perkDays = intInRange(p.perkDays, 'perkDays', 1, 365);
 
   return out;
 }

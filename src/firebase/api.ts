@@ -22,7 +22,9 @@ type Ok = { ok: true };
  */
 export async function fetchAppConfig(): Promise<AppConfig> {
   const snap = await getDoc(doc(db, 'config', 'app'));
-  return snap.exists() ? (snap.data() as AppConfig) : DEFAULT_CONFIG;
+  // Field-merge over the defaults so a doc written before a newer field
+  // existed (e.g. the Room Pass settings) doesn't surface `undefined` in the UI.
+  return snap.exists() ? { ...DEFAULT_CONFIG, ...(snap.data() as Partial<AppConfig>) } : DEFAULT_CONFIG;
 }
 
 /**
