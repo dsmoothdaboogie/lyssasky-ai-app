@@ -8,6 +8,10 @@ export const DEFAULT_CONFIG: AppConfig = {
   generationMode: 'mock',
   notifyEmail: 'marjorie@lyssasky.com',
   featureFlags: {},
+  passRestyles: 5,
+  passDays: 7,
+  perkDiscountPct: 10,
+  perkDays: 30,
   questionnaire: [
     {
       id: 'roomType', prompt: 'Which room are we restyling?', type: 'single', required: true,

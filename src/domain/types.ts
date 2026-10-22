@@ -15,6 +15,29 @@ export interface QuestionnaireAnswers {
   timeline: string;   // slug, e.g. "within_3_months"
 }
 
+export interface LeadPass {
+  restylesTotal: number;  // snapshotted from config.passRestyles at payment
+  restylesUsed: number;   // first preview does NOT count
+  expiresAt: number;      // ms; paidAt + passDays
+  inFlight?: number;      // ms; set while a restyle generates (concurrency guard)
+}
+
+export interface LeadPerk {
+  code: string;           // e.g. "ROOM-7KX2"
+  discountPct: number;    // snapshotted from config.perkDiscountPct
+  validUntil: number;     // ms; paidAt + perkDays
+  redeemedAt?: number;    // set by admin when Marjorie applies it
+}
+
+export interface Look {
+  imagePath: string;
+  styleSlug: string;
+  colorMood: string;
+  createdAt: number;
+}
+
+export type BookingInterest = 'chat' | 'virtual_styling' | 'room_refresh';
+
 export interface StyleRecipe {
   description: string; // customer-facing; not sent verbatim to the model
   materials: string;   // "oak, linen, matte black metal"
@@ -42,6 +65,10 @@ export interface AppConfig {
   questionnaire: QuestionDef[];
   notifyEmail: string;
   featureFlags: Record<string, boolean>;
+  passRestyles: number;    // 5
+  passDays: number;        // 7
+  perkDiscountPct: number; // 10
+  perkDays: number;        // 30
 }
 
 export interface QuestionOption { value: string; label: string; imageUrl?: string; description?: string; }
@@ -65,12 +92,16 @@ export interface Lead {
   paymentId?: string;
   rating?: number;                   // 1..5
   feedback?: string;                 // "what would you change"
-  booking?: { name: string; phone?: string; note?: string };
+  booking?: { name: string; phone?: string; note?: string; interest?: BookingInterest };
   costEstimateTotal: number;         // sum of generation cost estimates
   timestamps: Partial<Record<LeadStatus, number>>; // ms since epoch per status
   regenerateCount?: number;          // owner-initiated regenerates from a completed lead (cap: 1)
   generationClaimedAt?: number;      // set atomically when onLeadPaid claims a 'paid' lead, guards against duplicate/redelivered triggers
   bookingNotifiedAt?: number;        // set atomically when onLeadBooked claims a 'booked' lead, guards against duplicate/redelivered triggers
+  pass?: LeadPass;                   // Room Pass, issued at payment
+  perk?: LeadPerk;                   // booking perk code, issued at payment
+  looks?: Look[];                    // labeled gallery, oldest first (parallel to generatedImagePaths for paid leads)
+  remindedAt?: number;               // pass-expiring email claimed (idempotency)
   createdAt: number;
   updatedAt: number;
 }
@@ -101,6 +132,7 @@ export interface GenerationRecord {
   costEstimate: number;
   status: 'success' | 'failed';
   error?: string;
+  watermarkFailed?: boolean;
   createdAt: number;
 }
 
@@ -108,7 +140,7 @@ export interface MailDocument {
   to: string;
   message: { subject: string; html: string };
   createdAt: number;
-  kind: 'booking_notification' | 'result_ready';
+  kind: 'booking_notification' | 'result_ready' | 'pass_expiring';
   leadId?: string;
 }
 
