@@ -1,22 +1,22 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { ChangeEvent } from 'react';
-import { Link } from 'react-router-dom';
-import { fetchAllLeads } from '../firebase/api';
-import type { Lead, LeadStatus } from '../domain/types';
+import { useEffect, useMemo, useState } from "react";
+import type { ChangeEvent } from "react";
+import { Link } from "react-router-dom";
+import { fetchAllLeads } from "../firebase/api";
+import type { Lead, LeadStatus } from "../domain/types";
 
-const STATUS_FILTERS: Array<'all' | LeadStatus> = [
-  'all',
-  'captured',
-  'paid',
-  'generated',
-  'rated',
-  'booked',
-  'failed',
+const STATUS_FILTERS: Array<"all" | LeadStatus> = [
+  "all",
+  "captured",
+  "paid",
+  "generated",
+  "rated",
+  "booked",
+  "failed",
 ];
 
-const dateFormatter = new Intl.DateTimeFormat('en-US', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
+const dateFormatter = new Intl.DateTimeFormat("en-US", {
+  dateStyle: "medium",
+  timeStyle: "short",
 });
 
 function formatCreatedAt(ms: number): string {
@@ -38,7 +38,7 @@ function StatusChip({ status }: { status: LeadStatus }) {
  */
 export function LeadsListPage() {
   const [leads, setLeads] = useState<Lead[] | null>(null);
-  const [statusFilter, setStatusFilter] = useState<'all' | LeadStatus>('all');
+  const [statusFilter, setStatusFilter] = useState<"all" | LeadStatus>("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -52,7 +52,7 @@ export function LeadsListPage() {
 
   const visibleLeads = useMemo(() => {
     if (!leads) return [];
-    if (statusFilter === 'all') return leads;
+    if (statusFilter === "all") return leads;
     return leads.filter((lead) => lead.status === statusFilter);
   }, [leads, statusFilter]);
 
@@ -74,7 +74,7 @@ export function LeadsListPage() {
             id="leads-status-filter"
             value={statusFilter}
             onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-              setStatusFilter(e.target.value as 'all' | LeadStatus)
+              setStatusFilter(e.target.value as "all" | LeadStatus)
             }
           >
             {STATUS_FILTERS.map((status) => (
@@ -86,32 +86,34 @@ export function LeadsListPage() {
         </label>
       </div>
 
-      <table className="admin-leads-table">
-        <thead>
-          <tr>
-            <th scope="col">Email</th>
-            <th scope="col">Status</th>
-            <th scope="col">Style</th>
-            <th scope="col">Created</th>
-            <th scope="col" aria-label="Details" />
-          </tr>
-        </thead>
-        <tbody>
-          {visibleLeads.map((lead) => (
-            <tr key={lead.id}>
-              <td>{lead.email ?? '(no email yet)'}</td>
-              <td>
-                <StatusChip status={lead.status} />
-              </td>
-              <td>{lead.answers?.styleSlug ?? '—'}</td>
-              <td>{formatCreatedAt(lead.createdAt)}</td>
-              <td>
-                <Link to={`/admin/leads/${lead.id}`}>View</Link>
-              </td>
+      <div className="admin-leads-table-wrap">
+        <table className="admin-leads-table">
+          <thead>
+            <tr>
+              <th scope="col">Email</th>
+              <th scope="col">Status</th>
+              <th scope="col">Style</th>
+              <th scope="col">Created</th>
+              <th scope="col" aria-label="Details" />
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {visibleLeads.map((lead) => (
+              <tr key={lead.id}>
+                <td>{lead.email ?? "(no email yet)"}</td>
+                <td>
+                  <StatusChip status={lead.status} />
+                </td>
+                <td>{lead.answers?.styleSlug ?? "—"}</td>
+                <td>{formatCreatedAt(lead.createdAt)}</td>
+                <td>
+                  <Link to={`/admin/leads/${lead.id}`}>View</Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {visibleLeads.length === 0 && (
         <p className="text-muted">No leads match this filter.</p>
