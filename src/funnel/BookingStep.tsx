@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { FunnelLayout } from './FunnelLayout';
 import { Button } from '../components/Button';
 import { useFunnelState } from './useFunnelState';
-import { apiSubmitBooking, fetchAppConfig, fetchLead } from '../firebase/api';
+import { apiGetResultByToken, apiSubmitBooking, fetchAppConfig, fetchLead } from '../firebase/api';
 import { ensureAnonymousAuth } from '../firebase/client';
 import { BOOKING_INTERESTS, INTEREST_LABELS, isPerkValid } from '../domain/pass';
 import type { BookingInterest, LeadPerk } from '../domain/types';
@@ -24,6 +24,9 @@ export function BookingStep() {
   const [searchParams] = useSearchParams();
   const { leadId: stateLeadId } = useFunnelState();
   const leadId = stateLeadId ?? searchParams.get('lead');
+  // Emailed link: the token authorizes reading the perk/status and booking
+  // from a device that doesn't own the lead.
+  const token = searchParams.get('token');
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -50,8 +53,9 @@ export function BookingStep() {
       if (leadId) {
         try {
           await ensureAnonymousAuth();
-          const lead = await fetchLead(leadId);
-          if (!cancelled && lead?.perk && isPerkValid(lead, Date.now())) setPerk(lead.perk);
+          const lead = token ? await apiGetResultByToken(leadId, token) : await fetchLead(leadId);
+          const leadPerk = lead?.perk ?? undefined;
+          if (!cancelled && leadPerk && isPerkValid({ perk: leadPerk }, Date.now())) setPerk(leadPerk);
           // Already booked (e.g. returning via the emailed link): re-submitting
           // would be an illegal booked -> booked transition, so show the done state.
           if (!cancelled && lead?.status === 'booked') setSubmitted(true);
@@ -61,7 +65,7 @@ export function BookingStep() {
     return () => {
       cancelled = true;
     };
-  }, [leadId]);
+  }, [leadId, token]);
 
   const onNameChange = (e: ChangeEvent<HTMLInputElement>) => {
     setName(e.target.value);
@@ -88,12 +92,14 @@ export function BookingStep() {
       await ensureAnonymousAuth();
       const trimmedPhone = phone.trim();
       const trimmedNote = note.trim();
-      await apiSubmitBooking(leadId, {
+      const booking = {
         name: trimmedName,
         interest,
         ...(trimmedPhone ? { phone: trimmedPhone } : {}),
         ...(trimmedNote ? { note: trimmedNote } : {}),
-      });
+      };
+      if (token) await apiSubmitBooking(leadId, booking, token);
+      else await apiSubmitBooking(leadId, booking);
       setSubmitted(true);
     } catch {
       setError(GENERIC_ERROR);

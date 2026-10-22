@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db, storage } from './admin';
+import { tokenMatches } from './guards';
 import type { Lead, TokenResult } from '../../src/domain/types';
 
 /**
@@ -59,7 +60,7 @@ async function resolveDownloadUrl(path: string): Promise<string> {
  */
 export async function getResultByTokenDoc(leadId: string, leadToken: string): Promise<TokenResult> {
   const lead = (await db.collection('leads').doc(leadId).get()).data() as Lead | undefined;
-  if (!lead || lead.leadToken !== leadToken) {
+  if (!lead || !tokenMatches(lead, leadToken)) {
     throw new HttpsError('permission-denied', 'Invalid link');
   }
   const imageUrls = await Promise.all(lead.generatedImagePaths.map(resolveDownloadUrl));

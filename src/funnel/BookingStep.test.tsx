@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { FunnelProvider } from './useFunnelState';
 import { BookingStep } from './BookingStep';
-import { apiSubmitBooking, fetchAppConfig, apiLogEvent, fetchLead } from '../firebase/api';
+import { apiSubmitBooking, fetchAppConfig, apiLogEvent, fetchLead, apiGetResultByToken } from '../firebase/api';
 import { ensureAnonymousAuth } from '../firebase/client';
 import { DEFAULT_CONFIG } from '../config/defaultConfig';
 
@@ -23,15 +23,16 @@ vi.mock('../firebase/api', () => ({
   }),
   apiLogEvent: vi.fn().mockResolvedValue({ ok: true }),
   fetchLead: vi.fn(),
+  apiGetResultByToken: vi.fn(),
 }));
 
 vi.mock('../firebase/client', () => ({
   ensureAnonymousAuth: vi.fn().mockResolvedValue('u1'),
 }));
 
-function renderBookingStep() {
+function renderBookingStep(entry = '/book?lead=l1') {
   return render(
-    <MemoryRouter initialEntries={['/book?lead=l1']}>
+    <MemoryRouter initialEntries={[entry]}>
       <FunnelProvider>
         <BookingStep />
       </FunnelProvider>
@@ -117,5 +118,34 @@ describe('BookingStep', () => {
     await user.type(screen.getByLabelText('Name'), 'Jane');
     await user.click(screen.getByRole('button', { name: 'Book my consultation' }));
     await waitFor(() => expect(apiSubmitBooking).toHaveBeenCalledWith('l1', { name: 'Jane', interest: 'chat' }));
+  });
+
+  describe('with an emailed ?token', () => {
+    const tokenResult = (overrides = {}) => ({
+      status: 'generated', imageUrls: [], looks: [], pass: null,
+      perk: { code: 'ROOM-7KX2', discountPct: 10, validUntil: Date.now() + 86_400_000 },
+      ...overrides,
+    });
+
+    it('reads perk via apiGetResultByToken (not fetchLead) and books with the token', async () => {
+      const user = userEvent.setup();
+      vi.mocked(apiGetResultByToken).mockResolvedValue(tokenResult() as never);
+      renderBookingStep('/book?lead=l1&token=tok');
+      expect(await screen.findByText(/ROOM-7KX2/)).toBeInTheDocument();
+      expect(apiGetResultByToken).toHaveBeenCalledWith('l1', 'tok');
+      expect(fetchLead).not.toHaveBeenCalled();
+
+      await user.type(screen.getByLabelText('Name'), 'Jane');
+      await user.click(screen.getByRole('button', { name: 'Book my consultation' }));
+      await waitFor(() => expect(apiSubmitBooking).toHaveBeenCalledWith('l1', { name: 'Jane', interest: 'chat' }, 'tok'));
+      expect(await screen.findByText(/You're all set/)).toBeInTheDocument();
+    });
+
+    it('shows the all-set state when the token read says booked', async () => {
+      vi.mocked(apiGetResultByToken).mockResolvedValue(tokenResult({ status: 'booked', perk: null }) as never);
+      renderBookingStep('/book?lead=l1&token=tok');
+      expect(await screen.findByText(/You're all set — Marjorie will be in touch/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Book my consultation' })).not.toBeInTheDocument();
+    });
   });
 });

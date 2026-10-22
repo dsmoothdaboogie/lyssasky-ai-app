@@ -1,7 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from './admin';
-import { assertOwner } from './guards';
+import { assertOwnerOrToken } from './guards';
 import { loadConfig } from './config';
 import { generateLook } from './generation/runGeneration';
 import { isPassExpired, isRestyleInFlight, restylesLeft } from '../../src/domain/pass';
@@ -29,13 +29,13 @@ async function assertValidChoice(styleSlug: unknown, colorMood: unknown): Promis
  * retry after the winner had already finished and cleared inFlight. A precondition
  * failure is immediate, and the retry then sees the winner's inFlight marker.
  */
-async function reserveRestyle(leadId: string, uid: string, isAdmin: boolean): Promise<Lead> {
+async function reserveRestyle(leadId: string, uid: string, isAdmin: boolean, leadToken?: string): Promise<Lead> {
   const ref = db.collection('leads').doc(leadId);
   for (let attempt = 0; attempt < 5; attempt++) {
     const snap = await ref.get();
     const lead = snap.data() as Lead | undefined;
     if (!lead) throw new HttpsError('not-found', 'Lead not found');
-    if (!isAdmin) assertOwner(uid, lead);
+    if (!isAdmin) assertOwnerOrToken(uid, lead, leadToken);
     const now = Date.now();
     if (!lead.pass || isPassExpired(lead, now)) {
       throw new HttpsError('failed-precondition', 'Your Room Pass has ended');
@@ -67,10 +67,10 @@ export async function restyleDoc(
   leadId: string,
   uid: string,
   input: { styleSlug: string; colorMood: string },
-  opts?: { isAdmin?: boolean; provider?: GenerationProvider; attemptTimeoutMs?: number },
+  opts?: { isAdmin?: boolean; leadToken?: string; provider?: GenerationProvider; attemptTimeoutMs?: number },
 ): Promise<{ imagePath: string; restylesLeft: number }> {
   await assertValidChoice(input?.styleSlug, input?.colorMood);
-  const lead = await reserveRestyle(leadId, uid, opts?.isAdmin === true);
+  const lead = await reserveRestyle(leadId, uid, opts?.isAdmin === true, opts?.leadToken);
   const ref = db.collection('leads').doc(leadId);
   const answers = { ...lead.answers!, styleSlug: input.styleSlug, colorMood: input.colorMood };
 
@@ -111,9 +111,10 @@ export async function restyleDoc(
 
 export const restyle = onCall({ timeoutSeconds: 120 }, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Sign-in required');
-  const { leadId, styleSlug, colorMood } = (req.data ?? {}) as Record<string, unknown>;
+  const { leadId, styleSlug, colorMood, leadToken } = (req.data ?? {}) as Record<string, unknown>;
   if (typeof leadId !== 'string' || !leadId) throw new HttpsError('invalid-argument', 'leadId is required');
   return restyleDoc(leadId, req.auth.uid, { styleSlug: styleSlug as string, colorMood: colorMood as string }, {
     isAdmin: req.auth.token?.admin === true,
+    leadToken: typeof leadToken === 'string' ? leadToken : undefined,
   });
 });

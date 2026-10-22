@@ -69,6 +69,27 @@ describe('restyleDoc', () => {
     await expect(restyleDoc(id, 'intruder', { styleSlug: 'japandi', colorMood: 'warm_cozy' })).rejects.toThrow(/permission/i);
   });
 
+  it('lets a different uid restyle with the right lead token', async () => {
+    const id = await seedPassLead('t1');
+    const { leadToken } = await read(id);
+    const res = await restyleDoc(id, 'other-device', { styleSlug: 'japandi', colorMood: 'light_airy' }, { leadToken });
+    expect(res.restylesLeft).toBe(4);
+    expect((await read(id)).pass!.restylesUsed).toBe(1);
+  });
+
+  it('rejects a wrong token, and no token, from a different uid', async () => {
+    const id = await seedPassLead('t2');
+    await expect(restyleDoc(id, 'other-device', { styleSlug: 'japandi', colorMood: 'warm_cozy' }, { leadToken: 'wrong' })).rejects.toThrow(/permission/i);
+    await expect(restyleDoc(id, 'other-device', { styleSlug: 'japandi', colorMood: 'warm_cozy' })).rejects.toThrow(/permission/i);
+    expect((await read(id)).pass!.restylesUsed).toBe(0);
+  });
+
+  it('still enforces pass limits for a token caller', async () => {
+    const id = await seedPassLead('t3', { pass: { restylesTotal: 5, restylesUsed: 5, expiresAt: Date.now() + 7 * DAY_MS } });
+    const { leadToken } = await read(id);
+    await expect(restyleDoc(id, 'other-device', { styleSlug: 'japandi', colorMood: 'warm_cozy' }, { leadToken })).rejects.toThrow(/used all your restyles/);
+  });
+
   it('rejects unknown or inactive styles and unknown moods', async () => {
     const id = await seedPassLead('r3');
     await expect(restyleDoc(id, 'r3', { styleSlug: 'nope', colorMood: 'warm_cozy' })).rejects.toThrow(/style isn't available/);

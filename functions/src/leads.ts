@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from './admin';
-import { assertOwner } from './guards';
+import { assertOwner, assertOwnerOrToken } from './guards';
 import { assertTransition } from '../../src/domain/leadStatus';
 import { logEventDoc } from './events';
 import { runGeneration } from './generation/runGeneration';
@@ -62,16 +62,21 @@ export const attachPhoto = onCall(async (req) => {
   return { ok: true };
 });
 
+function tokenArg(data: { leadToken?: unknown } | undefined): string | undefined {
+  return typeof data?.leadToken === 'string' ? data.leadToken : undefined;
+}
+
 export async function submitFeedbackDoc(
   leadId: string,
   uid: string,
   rating: number,
-  feedback: string
+  feedback: string,
+  leadToken?: string
 ): Promise<void> {
   const ref = db.collection('leads').doc(leadId);
   const lead = (await ref.get()).data() as Lead | undefined;
   if (!lead) throw new HttpsError('not-found', 'Lead not found');
-  assertOwner(uid, lead);
+  assertOwnerOrToken(uid, lead, leadToken);
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
     throw new HttpsError('invalid-argument', 'Rating must be a whole number from 1 to 5.');
   }
@@ -83,19 +88,20 @@ export async function submitFeedbackDoc(
 
 export const submitFeedback = onCall(async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Sign-in required');
-  await submitFeedbackDoc(req.data.leadId, req.auth.uid, req.data.rating, req.data.feedback);
+  await submitFeedbackDoc(req.data.leadId, req.auth.uid, req.data.rating, req.data.feedback, tokenArg(req.data));
   return { ok: true };
 });
 
 export async function submitBookingDoc(
   leadId: string,
   uid: string,
-  booking: NonNullable<Lead['booking']>
+  booking: NonNullable<Lead['booking']>,
+  leadToken?: string
 ): Promise<void> {
   const ref = db.collection('leads').doc(leadId);
   const lead = (await ref.get()).data() as Lead | undefined;
   if (!lead) throw new HttpsError('not-found', 'Lead not found');
-  assertOwner(uid, lead);
+  assertOwnerOrToken(uid, lead, leadToken);
   if (booking.interest !== undefined && !BOOKING_INTERESTS.includes(booking.interest)) {
     throw new HttpsError('invalid-argument', 'Unknown booking interest');
   }
@@ -107,7 +113,7 @@ export async function submitBookingDoc(
 
 export const submitBooking = onCall(async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Sign-in required');
-  await submitBookingDoc(req.data.leadId, req.auth.uid, req.data.booking);
+  await submitBookingDoc(req.data.leadId, req.auth.uid, req.data.booking, tokenArg(req.data));
   return { ok: true };
 });
 

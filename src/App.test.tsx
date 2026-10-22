@@ -4,6 +4,7 @@ import App from './App';
 
 vi.mock('./firebase/api', () => ({
   apiLogEvent: vi.fn().mockResolvedValue({ ok: true }),
+  fetchAppConfig: vi.fn().mockRejectedValue(new Error('offline')),
 }));
 
 test('renders the landing page at the root route', () => {

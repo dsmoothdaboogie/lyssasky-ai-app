@@ -40,6 +40,17 @@ describe('submitFeedbackDoc', () => {
       .rejects.toThrow(/permission/i);
   });
 
+  it('lets a different uid rate with the right token, rejects wrong or missing token', async () => {
+    const leadId = await seedGeneratedLead('owner2b');
+    const { leadToken } = (await db.collection('leads').doc(leadId).get()).data()!;
+    await expect(submitFeedbackDoc(leadId, 'other', 5, 'x', 'wrong')).rejects.toThrow(/permission/i);
+    await expect(submitFeedbackDoc(leadId, 'other', 5, 'x')).rejects.toThrow(/permission/i);
+    await submitFeedbackDoc(leadId, 'other', 5, 'via token', leadToken);
+    const lead = (await db.collection('leads').doc(leadId).get()).data()!;
+    expect(lead.status).toBe('rated');
+    expect(lead.feedback).toBe('via token');
+  });
+
   it('rejects a non-existent lead', async () => {
     await expect(submitFeedbackDoc('does-not-exist', 'u', 5, 'x'))
       .rejects.toThrow(/not.?found/i);
@@ -64,6 +75,17 @@ describe('submitBookingDoc', () => {
     const leadId = await seedGeneratedLead('owner4');
     await expect(submitBookingDoc(leadId, 'intruder', { name: 'X' }))
       .rejects.toThrow(/permission/i);
+  });
+
+  it('lets a different uid book with the right token, rejects wrong or missing token', async () => {
+    const leadId = await seedGeneratedLead('owner4b');
+    const { leadToken } = (await db.collection('leads').doc(leadId).get()).data()!;
+    await expect(submitBookingDoc(leadId, 'other', { name: 'X' }, 'wrong')).rejects.toThrow(/permission/i);
+    await expect(submitBookingDoc(leadId, 'other', { name: 'X' })).rejects.toThrow(/permission/i);
+    await submitBookingDoc(leadId, 'other', { name: 'Via Token' }, leadToken);
+    const lead = (await db.collection('leads').doc(leadId).get()).data()!;
+    expect(lead.status).toBe('booked');
+    expect(lead.booking).toEqual({ name: 'Via Token' });
   });
 
   it('rejects a non-existent lead', async () => {

@@ -1,8 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FunnelLayout } from './FunnelLayout';
 import { Button } from '../components/Button';
-import { apiLogEvent } from '../firebase/api';
+import { apiLogEvent, fetchAppConfig } from '../firebase/api';
+import { DEFAULT_CONFIG } from '../config/defaultConfig';
+import { formatPrice } from '../domain/price';
+import type { AppConfig } from '../domain/types';
 
 interface BeforeAfterTile {
   label: string;
@@ -43,23 +46,33 @@ function RoomTile({ color, tone }: { color: string; tone: 'before' | 'after' }) 
 /**
  * Funnel entry point. Sets the warm, no-pressure tone, shows a few
  * illustrative before/after tiles (inline SVG only — no remote assets),
- * and hands off to the upload step for a $5 restyle preview.
+ * and hands off to the upload step for a Room Pass purchase.
  */
 export function LandingPage() {
   const navigate = useNavigate();
+  // Start from the defaults so the first render already shows real copy;
+  // admin-edited pass settings replace them once loaded (best-effort).
+  const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
 
   useEffect(() => {
     apiLogEvent('page_view');
+    let cancelled = false;
+    fetchAppConfig()
+      .then((c) => { if (!cancelled) setConfig(c); })
+      .catch(() => { /* keep defaults */ });
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const price = formatPrice(config.priceCents);
 
   return (
     <FunnelLayout>
       <section>
         <h1>See your room, restyled</h1>
         <p>
-          Upload one photo of your space and get a <strong>$5 Room Pass</strong>: see your room
-          in up to 6 looks over 7 days, plus a free chat with Marjorie and 10% off her services.
+          Upload one photo of your space and get a <strong>{price} Room Pass</strong>: see your room
+          in {config.passRestyles === 0 ? '1 look' : `up to ${1 + config.passRestyles} looks`} over {config.passDays} days, plus a free chat with Marjorie and {config.perkDiscountPct}% off her services.
           It's a first look — a gentle "here's what's possible," not a finished redesign.
         </p>
       </section>
@@ -87,7 +100,7 @@ export function LandingPage() {
       </section>
 
       <section>
-        <Button onClick={() => navigate('/upload')}>Get your Room Pass — $5</Button>
+        <Button onClick={() => navigate('/upload')}>Get your Room Pass — {price}</Button>
         <p className="text-muted" style={{ marginTop: 'var(--space-3)', fontSize: '0.9rem' }}>
           No pressure, no judgment — just a warm, honest look at what your room could feel like.
         </p>
