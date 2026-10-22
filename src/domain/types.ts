@@ -105,6 +105,15 @@ export interface Lead {
   updatedAt: number;
 }
 
+export interface TokenLook { url: string; styleSlug: string; colorMood: string }
+export interface TokenResult {
+  status: LeadStatus;
+  imageUrls: string[];          // kept for backward compat
+  looks: TokenLook[];           // empty for legacy leads
+  pass: LeadPass | null;        // inFlight stripped
+  perk: LeadPerk | null;
+}
+
 export type AnalyticsEventType =
   | 'page_view' | 'photo_uploaded' | 'questionnaire_completed'
   | 'email_captured' | 'checkout_started' | 'payment_completed'

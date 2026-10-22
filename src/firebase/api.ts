@@ -7,10 +7,10 @@ import type {
   AnalyticsSummary,
   AppConfig,
   Lead,
-  LeadStatus,
   QuestionnaireAnswers,
   Style,
   StyleRecipe,
+  TokenResult,
 } from '../domain/types';
 import { DEFAULT_CONFIG } from '../config/defaultConfig';
 
@@ -150,10 +150,10 @@ export async function apiLogEvent(
 export async function apiGetResultByToken(
   leadId: string,
   leadToken: string
-): Promise<{ status: LeadStatus; imageUrls: string[] }> {
+): Promise<TokenResult> {
   const fn = httpsCallable<
     { leadId: string; leadToken: string },
-    { status: LeadStatus; imageUrls: string[] }
+    TokenResult
   >(functions, 'getResultByToken');
   const res = await fn({ leadId, leadToken });
   return res.data;

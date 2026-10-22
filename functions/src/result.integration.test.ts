@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { db, storage } from './admin';
 import { getResultByTokenDoc } from './result';
+import { createLeadDoc } from './leads';
 import type { Lead } from '../../src/domain/types';
 
 async function seedLead(id: string, overrides: Partial<Lead> = {}): Promise<void> {
@@ -45,5 +46,35 @@ describe('getResultByTokenDoc', () => {
     await expect(getResultByTokenDoc('does-not-exist', 't1')).rejects.toMatchObject({
       code: 'permission-denied',
     });
+  });
+
+  it('returns labeled looks, pass and perk — even after the pass expired', async () => {
+    const { leadId, leadToken } = await createLeadDoc('tok-owner');
+    const p1 = 'leads/tok-owner/generated/a.png';
+    const p2 = 'leads/tok-owner/generated/b.png';
+    for (const p of [p1, p2]) await storage.bucket().file(p).save(Buffer.from('png'), { contentType: 'image/png' });
+    await db.collection('leads').doc(leadId).update({
+      status: 'rated',
+      generatedImagePaths: [p1, p2],
+      looks: [
+        { imagePath: p1, styleSlug: 'scandi', colorMood: 'warm_cozy', createdAt: 1 },
+        { imagePath: p2, styleSlug: 'japandi', colorMood: 'light_airy', createdAt: 2 },
+      ],
+      pass: { restylesTotal: 5, restylesUsed: 1, expiresAt: Date.now() - 1, inFlight: 123 },
+      perk: { code: 'ROOM-ABCD', discountPct: 10, validUntil: Date.now() + 1000 },
+    });
+    const res = await getResultByTokenDoc(leadId, leadToken);
+    expect(res.looks.map((l) => l.styleSlug)).toEqual(['scandi', 'japandi']);
+    expect(res.looks[1].url).toContain('alt=media');
+    expect(res.pass).toEqual({ restylesTotal: 5, restylesUsed: 1, expiresAt: expect.any(Number) });
+    expect(res.perk!.code).toBe('ROOM-ABCD');
+  });
+
+  it('returns empty looks and null pass/perk for a legacy lead', async () => {
+    const { leadId, leadToken } = await createLeadDoc('tok-legacy');
+    const res = await getResultByTokenDoc(leadId, leadToken);
+    expect(res.looks).toEqual([]);
+    expect(res.pass).toBeNull();
+    expect(res.perk).toBeNull();
   });
 });
