@@ -255,24 +255,74 @@ describe('ResultStep', () => {
     expect(screen.queryByRole('group', { name: 'How close is this to your vision?' })).not.toBeInTheDocument();
   });
 
-  it('token mode loads via apiGetResultByToken, shows looks and perk but no restyle or rating', async () => {
+  const tokenResult = (overrides: Record<string, unknown> = {}) => ({
+    status: 'generated' as const, imageUrls: ['https://img/a', 'https://img/b'],
+    looks: [
+      { url: 'https://img/a', styleSlug: 'scandi', colorMood: 'warm_cozy' },
+      { url: 'https://img/b', styleSlug: 'japandi', colorMood: 'light_airy' },
+    ],
+    pass: { restylesTotal: 5, restylesUsed: 1, expiresAt: Date.UTC(2026, 9, 28, 16) },
+    perk: { code: 'ROOM-7KX2', discountPct: 10, validUntil: Date.UTC(2026, 10, 20) },
+    ...overrides,
+  });
+
+  it('token-authorized mode loads via apiGetResultByToken and shows full controls', async () => {
     vi.mocked(fetchLead).mockRejectedValue(new Error('permission-denied'));
-    vi.mocked(apiGetResultByToken).mockResolvedValue({
-      status: 'generated', imageUrls: ['https://img/a', 'https://img/b'],
-      looks: [
-        { url: 'https://img/a', styleSlug: 'scandi', colorMood: 'warm_cozy' },
-        { url: 'https://img/b', styleSlug: 'japandi', colorMood: 'light_airy' },
-      ],
-      pass: { restylesTotal: 5, restylesUsed: 1, expiresAt: Date.UTC(2026, 9, 1) },
-      perk: { code: 'ROOM-7KX2', discountPct: 10, validUntil: Date.UTC(2026, 10, 20) },
-    });
+    vi.mocked(apiGetResultByToken).mockResolvedValue(tokenResult());
     renderResultStep('/result?lead=l1&token=tok');
     expect(await screen.findByText('Japandi · Light & airy')).toBeInTheDocument();
     expect(apiGetResultByToken).toHaveBeenCalledWith('l1', 'tok');
     expect(getImageUrl).not.toHaveBeenCalled();
     expect(screen.getAllByRole('button', { name: /^Look \d/ })).toHaveLength(2);
     expect(screen.getByText(/ROOM-7KX2/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Try another look' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try another look' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'How close is this to your vision?' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Book your free 15-min chat/ })).toHaveAttribute('href', '/book?lead=l1&token=tok');
+    expect(screen.queryByText(/device you started on/)).not.toBeInTheDocument();
+  });
+
+  it('token-authorized restyle passes the token and refreshes via apiGetResultByToken', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    vi.mocked(fetchLead).mockRejectedValue(new Error('permission-denied'));
+    vi.mocked(apiGetResultByToken)
+      .mockResolvedValueOnce(tokenResult({
+        looks: [{ url: 'https://img/a', styleSlug: 'scandi', colorMood: 'warm_cozy' }], imageUrls: ['https://img/a'],
+      }))
+      .mockResolvedValueOnce(tokenResult({
+        pass: { restylesTotal: 5, restylesUsed: 2, expiresAt: Date.UTC(2026, 9, 28, 16) },
+      }));
+    vi.mocked(apiRestyle).mockResolvedValue({ imagePath: 'p', restylesLeft: 3 });
+    renderResultStep('/result?lead=l1&token=tok');
+
+    await user.click(await screen.findByRole('button', { name: 'Try another look' }));
+    await user.click(await screen.findByRole('button', { name: /Japandi/ }));
+    await user.click(screen.getByRole('button', { name: 'Light & airy' }));
+    await user.click(screen.getByRole('button', { name: 'Restyle' }));
+
+    expect(apiRestyle).toHaveBeenCalledWith('l1', 'japandi', 'light_airy', 'tok');
+    expect(await screen.findByText('Japandi · Light & airy')).toBeInTheDocument();
+    expect(screen.getByText('3 restyles left · ends Oct 28')).toBeInTheDocument();
+    expect(apiGetResultByToken).toHaveBeenCalledTimes(2);
+    expect(fetchLead).toHaveBeenCalledTimes(1); // only the initial owned attempt
+  });
+
+  it('token-authorized rating passes the token and navigates to /book with it', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    vi.mocked(fetchLead).mockRejectedValue(new Error('permission-denied'));
+    vi.mocked(apiGetResultByToken).mockResolvedValue(tokenResult());
+    renderResultStep('/result?lead=l1&token=tok');
+    await user.click(await screen.findByRole('button', { name: '4' }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(apiSubmitFeedback).toHaveBeenCalledWith('l1', 4, '', 'tok'));
+    expect(await screen.findByText('book-screen:l1')).toBeInTheDocument();
+  });
+
+  it('token-authorized booked lead shows the booked note, not the chat CTA or rating', async () => {
+    vi.mocked(fetchLead).mockRejectedValue(new Error('permission-denied'));
+    vi.mocked(apiGetResultByToken).mockResolvedValue(tokenResult({ status: 'booked' }));
+    renderResultStep('/result?lead=l1&token=tok');
+    expect(await screen.findByText(/You're booked/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Book your free 15-min chat/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'How close is this to your vision?' })).not.toBeInTheDocument();
   });
 
@@ -290,6 +340,7 @@ describe('ResultStep', () => {
     renderResultStep('/result?lead=l1&token=tok');
     expect(await screen.findByRole('button', { name: 'Try another look' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Book your free 15-min chat/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Book your free 15-min chat/ })).toHaveAttribute('href', '/book?lead=l1');
     expect(apiGetResultByToken).not.toHaveBeenCalled();
   });
 

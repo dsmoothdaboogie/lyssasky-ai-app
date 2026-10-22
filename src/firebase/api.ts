@@ -90,25 +90,27 @@ export async function apiAttachPhoto(leadId: string, path: string): Promise<Ok> 
 export async function apiSubmitFeedback(
   leadId: string,
   rating: number,
-  feedback: string
+  feedback: string,
+  leadToken?: string
 ): Promise<Ok> {
-  const fn = httpsCallable<{ leadId: string; rating: number; feedback: string }, Ok>(
+  const fn = httpsCallable<{ leadId: string; rating: number; feedback: string; leadToken?: string }, Ok>(
     functions,
     'submitFeedback'
   );
-  const res = await fn({ leadId, rating, feedback });
+  const res = await fn({ leadId, rating, feedback, ...(leadToken ? { leadToken } : {}) });
   return res.data;
 }
 
 export async function apiSubmitBooking(
   leadId: string,
-  booking: NonNullable<Lead['booking']>
+  booking: NonNullable<Lead['booking']>,
+  leadToken?: string
 ): Promise<Ok> {
-  const fn = httpsCallable<{ leadId: string; booking: NonNullable<Lead['booking']> }, Ok>(
+  const fn = httpsCallable<{ leadId: string; booking: NonNullable<Lead['booking']>; leadToken?: string }, Ok>(
     functions,
     'submitBooking'
   );
-  const res = await fn({ leadId, booking });
+  const res = await fn({ leadId, booking, ...(leadToken ? { leadToken } : {}) });
   return res.data;
 }
 
@@ -122,12 +124,13 @@ export async function apiRestyle(
   leadId: string,
   styleSlug: string,
   colorMood: string,
+  leadToken?: string,
 ): Promise<{ imagePath: string; restylesLeft: number }> {
   const fn = httpsCallable<
-    { leadId: string; styleSlug: string; colorMood: string },
+    { leadId: string; styleSlug: string; colorMood: string; leadToken?: string },
     { imagePath: string; restylesLeft: number }
   >(functions, 'restyle', { timeout: 130_000 });
-  return (await fn({ leadId, styleSlug, colorMood })).data;
+  return (await fn({ leadId, styleSlug, colorMood, ...(leadToken ? { leadToken } : {}) })).data;
 }
 
 export async function apiLogEvent(

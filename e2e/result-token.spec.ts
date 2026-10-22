@@ -38,11 +38,44 @@ test('the emailed result link renders the image from a different browser context
     const src = await img.getAttribute('src');
     expect(src).toMatch(/^https?:\/\//);
 
-    // Token mode is read-only: rating/regenerate are owner-guarded
-    // server-side, so a device that can't prove ownership never sees them.
+    // The token authorizes actions, so the new device gets the full controls.
     await expect(
       otherPage.getByRole('group', { name: 'How close is this to your vision?' })
-    ).not.toBeVisible();
+    ).toBeVisible();
+  } finally {
+    await otherContext.close();
+  }
+});
+
+/**
+ * The emailed link is a credential: on a brand-new device it can restyle and
+ * book, not just view.
+ */
+test('the emailed link can restyle and book from a different browser context', async ({
+  page,
+  request,
+  browser,
+}) => {
+  const { leadId } = await runFunnelToResult(page);
+  const leadToken = await fetchLeadToken(request, leadId);
+
+  const otherContext = await browser.newContext();
+  try {
+    const otherPage = await otherContext.newPage();
+    await otherPage.goto(`/result?lead=${leadId}&token=${leadToken}`);
+    await expect(otherPage.getByText(/5 restyles left/)).toBeVisible({ timeout: 15_000 });
+
+    await otherPage.getByRole('button', { name: 'Try another look' }).click();
+    await otherPage.getByRole('group', { name: 'Pick a style' }).getByRole('button').nth(1).click();
+    await otherPage.getByRole('group', { name: 'Pick a mood' }).getByRole('button', { name: 'Light & airy' }).click();
+    await otherPage.getByRole('button', { name: 'Restyle' }).click();
+    await expect(otherPage.getByText(/4 restyles left/)).toBeVisible({ timeout: 30_000 });
+
+    await otherPage.getByRole('link', { name: /Book your free 15-min chat/ }).click();
+    await expect(otherPage).toHaveURL(new RegExp(`/book\\?lead=${leadId}&token=${leadToken}`));
+    await otherPage.getByLabel('Name').fill('E2E Cross Device');
+    await otherPage.getByRole('button', { name: 'Book my consultation' }).click();
+    await expect(otherPage.getByText(/You're all set/)).toBeVisible({ timeout: 10_000 });
   } finally {
     await otherContext.close();
   }

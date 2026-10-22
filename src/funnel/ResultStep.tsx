@@ -41,6 +41,19 @@ async function loadOwnedView(leadId: string): Promise<{ view: View; originalPath
   };
 }
 
+/**
+ * Reads a lead through the token callable (the emailed link's credential). It
+ * returns already-resolved download URLs (resolved server-side with the Admin
+ * SDK, since a non-owner uid can't resolve `leads/{ownerUid}/generated/*`
+ * paths itself via getImageUrl) — so there is no before photo here.
+ */
+async function loadTokenView(leadId: string, token: string): Promise<View | null> {
+  const result = await apiGetResultByToken(leadId, token);
+  const looks: ViewLook[] = result.looks.length ? result.looks : result.imageUrls.map((url) => ({ url }));
+  if (looks.length === 0) return null;
+  return { status: result.status, looks, pass: result.pass, perk: result.perk };
+}
+
 function errorMessage(err: unknown): string {
   // HttpsError messages from `restyle` are written for customers; SDK-generated
   // failures (deadline-exceeded, internal) carry the bare code as the message.
@@ -62,11 +75,12 @@ function errorMessage(err: unknown): string {
  *     brand-new device, this anonymous uid is NOT the lead's owner (it's a
  *     fresh uid), so `fetchLead` would be denied by firestore.rules. Instead
  *     this reads via the public `getResultByToken` callable, which trusts
- *     the opaque `leadToken` as the credential. Since this path can't prove
- *     ownership, it's read-only: rating/feedback/restyle are all
- *     owner-guarded callables server-side, so those controls are hidden here
- *     rather than shown and left to fail. It still shows the looks strip and
- *     the Marjorie perk.
+ *     the opaque `leadToken` as the credential. That same token authorizes
+ *     `restyle` and `submitFeedback` server-side (`assertOwnerOrToken`), so
+ *     this "token-authorized" mode has the full controls: it passes the token
+ *     to those callables, re-reads via the token callable afterwards, and
+ *     links to `/book` with the token. On the owner's own device the owned
+ *     read succeeds first and the token is not needed.
  *
  * Generation is already done by the time this page loads, so a one-shot
  * fetch is enough in every case (no need for the realtime `watchLead`
@@ -80,9 +94,12 @@ export function ResultStep() {
   const urlLeadId = searchParams.get('lead');
   const token = searchParams.get('token');
   const tokenMode = Boolean(urlLeadId && token);
-  // Token links start read-only; they upgrade to owned when this device's
-  // anonymous uid turns out to own the lead (see the load effect).
+  // Token links start unresolved; the load effect settles them as either owned
+  // (this device's anonymous uid owns the lead) or token-authorized.
   const [owned, setOwned] = useState(!tokenMode);
+  const [tokenAuthorized, setTokenAuthorized] = useState(false);
+  const canAct = owned || tokenAuthorized;
+  const actToken = tokenAuthorized && token ? token : undefined;
 
   const leadId = stateLeadId ?? urlLeadId;
 
@@ -150,25 +167,19 @@ export function ResultStep() {
 
         if (tokenMode && token && !ownedView) {
           // Emailed cross-device link: this uid doesn't own the lead, so read
-          // via the token-authenticated callable instead of fetchLead. It
-          // returns already-resolved download URLs (resolved server-side with
-          // the Admin SDK, since this uid can't resolve
-          // `leads/{ownerUid}/generated/*` paths itself via getImageUrl) —
-          // no before photo, and nothing to claim into funnel state, since
-          // this view is read-only.
-          const result = await apiGetResultByToken(leadId, token);
+          // via the token-authenticated callable instead of fetchLead. Nothing
+          // to claim into funnel state; the token itself authorizes actions.
+          const tokenView = await loadTokenView(leadId, token);
           if (cancelled || !mountedRef.current) return;
 
-          const looks: ViewLook[] = result.looks.length
-            ? result.looks
-            : result.imageUrls.map((url) => ({ url }));
-          if (looks.length === 0) {
+          if (!tokenView) {
             setLoadError("We couldn't find your finished design just yet — please try again shortly.");
             setLoading(false);
             return;
           }
 
-          applyView({ status: result.status, looks, pass: result.pass, perk: result.perk });
+          setTokenAuthorized(true);
+          applyView(tokenView);
           setLoading(false);
           return;
         }
@@ -230,14 +241,19 @@ export function ResultStep() {
     );
   }
 
+  const bookPath = actToken ? `/book?lead=${leadId}&token=${actToken}` : `/book?lead=${leadId}`;
+  const reload = async (): Promise<View | null> =>
+    actToken ? loadTokenView(leadId, actToken) : (await loadOwnedView(leadId))?.view ?? null;
+
   const handleSubmit = async () => {
     if (rating === null) return;
     setSubmitError(null);
     setSubmitting(true);
     try {
-      await apiSubmitFeedback(leadId, rating, feedback);
+      if (actToken) await apiSubmitFeedback(leadId, rating, feedback, actToken);
+      else await apiSubmitFeedback(leadId, rating, feedback);
       if (!mountedRef.current) return;
-      navigate(`/book?lead=${leadId}`);
+      navigate(bookPath);
     } catch {
       if (!mountedRef.current) return;
       setSubmitError(GENERIC_ERROR);
@@ -250,10 +266,11 @@ export function ResultStep() {
     setRestyleError(null);
     setRestyling(true);
     try {
-      await apiRestyle(leadId, styleSlug, colorMood);
-      const refreshed = await loadOwnedView(leadId);
+      if (actToken) await apiRestyle(leadId, styleSlug, colorMood, actToken);
+      else await apiRestyle(leadId, styleSlug, colorMood);
+      const refreshed = await reload();
       if (!mountedRef.current) return;
-      if (refreshed) applyView(refreshed.view);
+      if (refreshed) applyView(refreshed);
       setPickerOpen(false);
       const el = lookRef.current;
       if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -263,8 +280,8 @@ export function ResultStep() {
       // The server may have finished after the client gave up — show any look
       // that landed and the true restyle count. Best-effort only.
       try {
-        const refreshed = await loadOwnedView(leadId);
-        if (mountedRef.current && refreshed) applyView(refreshed.view);
+        const refreshed = await reload();
+        if (mountedRef.current && refreshed) applyView(refreshed);
       } catch {
         // Keep the error shown; the refresh is a nicety.
       }
@@ -396,13 +413,13 @@ export function ResultStep() {
           <p className="text-muted" style={{ textAlign: 'center' }}>{passStatus}</p>
         )}
 
-        {owned && passOpen && !pickerOpen && (
+        {canAct && passOpen && !pickerOpen && (
           <Button variant="secondary" onClick={() => setPickerOpen(true)} style={{ width: '100%' }}>
             Try another look
           </Button>
         )}
 
-        {owned && passOpen && pickerOpen && (
+        {canAct && passOpen && pickerOpen && (
           <div className="card" style={{ padding: 'var(--space-4)', marginTop: 'var(--space-3)' }}>
             {restyling ? (
               <div style={{ textAlign: 'center' }}>
@@ -425,7 +442,7 @@ export function ResultStep() {
           </div>
         )}
 
-        {owned && hasPass && !passOpen && (
+        {canAct && hasPass && !passOpen && (
           <div style={{ marginTop: 'var(--space-4)', textAlign: 'center' }}>
             <p>
               You've explored {lookCount} look{lookCount === 1 ? '' : 's'} — next step: talk them through with Marjorie.
@@ -437,13 +454,13 @@ export function ResultStep() {
         {(hasPass || showPerk) && (
           <div className="card" style={{ padding: 'var(--space-4)', marginTop: 'var(--space-5)' }}>
             <h2>Make it real with Marjorie</h2>
-            {owned && view.status === 'booked' && (
+            {canAct && view.status === 'booked' && (
               <p style={{ textAlign: 'center', fontWeight: 600 }}>
                 You're booked — Marjorie will have your looks ready
               </p>
             )}
-            {owned && view.status !== 'booked' && (
-              <Link to={`/book?lead=${leadId}`} className="btn btn-primary" style={{ display: 'block', textAlign: 'center' }}>
+            {canAct && view.status !== 'booked' && (
+              <Link to={bookPath} className="btn btn-primary" style={{ display: 'block', textAlign: 'center' }}>
                 Book your free 15-min chat — Marjorie will have your looks ready
               </Link>
             )}
@@ -456,7 +473,7 @@ export function ResultStep() {
           </div>
         )}
 
-        {owned && view.status === 'generated' && (
+        {canAct && view.status === 'generated' && (
           <>
             <h2>How close is this to your vision?</h2>
             <div
@@ -505,12 +522,6 @@ export function ResultStep() {
           </>
         )}
 
-        {!owned && (
-          <p className="text-muted" style={{ marginTop: 'var(--space-5)', textAlign: 'center' }}>
-            This is your emailed preview link — open it on the device you started on to rate it,
-            try more looks, or book a consult.
-          </p>
-        )}
       </section>
     </FunnelLayout>
   );
