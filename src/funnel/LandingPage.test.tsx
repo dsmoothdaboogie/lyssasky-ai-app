@@ -3,10 +3,12 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { FunnelProvider } from './useFunnelState';
 import { LandingPage } from './LandingPage';
-import { apiLogEvent } from '../firebase/api';
+import { apiLogEvent, fetchAppConfig } from '../firebase/api';
+import { DEFAULT_CONFIG } from '../config/defaultConfig';
 
 vi.mock('../firebase/api', () => ({
   apiLogEvent: vi.fn().mockResolvedValue({ ok: true }),
+  fetchAppConfig: vi.fn(),
 }));
 
 function renderLanding() {
@@ -23,6 +25,10 @@ function renderLanding() {
 }
 
 describe('LandingPage', () => {
+  beforeEach(() => {
+    (fetchAppConfig as ReturnType<typeof vi.fn>).mockResolvedValue(DEFAULT_CONFIG);
+  });
+
   it('renders the headline', () => {
     renderLanding();
     expect(screen.getByRole('heading', { name: /see your room, restyled/i })).toBeInTheDocument();
@@ -48,5 +54,32 @@ describe('LandingPage', () => {
     renderLanding();
     await user.click(screen.getByRole('button', { name: /get your room pass — \$5/i }));
     expect(screen.getByText('Upload screen')).toBeInTheDocument();
+  });
+
+  it('renders today\'s exact copy at the default config', async () => {
+    renderLanding();
+    const intro = screen.getByText(/Upload one photo of your space/);
+    expect(intro.textContent?.replace(/\s+/g, ' ')).toBe(
+      'Upload one photo of your space and get a $5 Room Pass: see your room in up to 6 looks over 7 days, plus a free chat with Marjorie and 10% off her services. It\'s a first look — a gentle "here\'s what\'s possible," not a finished redesign.'
+    );
+    expect(screen.getByRole('button', { name: 'Get your Room Pass — $5' })).toBeInTheDocument();
+  });
+
+  it('follows non-default pass settings', async () => {
+    (fetchAppConfig as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...DEFAULT_CONFIG, priceCents: 900, passRestyles: 3, passDays: 10, perkDiscountPct: 15,
+    });
+    renderLanding();
+    expect(await screen.findByRole('button', { name: 'Get your Room Pass — $9' })).toBeInTheDocument();
+    const intro = screen.getByText(/Upload one photo of your space/);
+    expect(intro.textContent).toContain('$9 Room Pass');
+    expect(intro.textContent).toContain('up to 4 looks over 10 days');
+    expect(intro.textContent).toContain('15% off her services');
+  });
+
+  it('keeps default copy when the config fetch fails', async () => {
+    (fetchAppConfig as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('offline'));
+    renderLanding();
+    expect(await screen.findByRole('button', { name: 'Get your Room Pass — $5' })).toBeInTheDocument();
   });
 });

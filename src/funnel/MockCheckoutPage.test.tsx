@@ -3,11 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { FunnelProvider } from './useFunnelState';
 import { MockCheckoutPage } from './MockCheckoutPage';
-import { apiConfirmPaymentMock, apiLogEvent } from '../firebase/api';
+import { apiConfirmPaymentMock, apiLogEvent, fetchAppConfig } from '../firebase/api';
+import { DEFAULT_CONFIG } from '../config/defaultConfig';
 
 vi.mock('../firebase/api', () => ({
   apiConfirmPaymentMock: vi.fn().mockResolvedValue({ ok: true }),
   apiLogEvent: vi.fn().mockResolvedValue({ ok: true }),
+  fetchAppConfig: vi.fn(),
 }));
 
 function renderMockCheckout(initialEntry = '/mock-checkout?lead=l1&session=mock_l1') {
@@ -38,6 +40,7 @@ describe('MockCheckoutPage', () => {
     vi.clearAllMocks();
     (apiConfirmPaymentMock as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true });
     (apiLogEvent as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true });
+    (fetchAppConfig as ReturnType<typeof vi.fn>).mockResolvedValue(DEFAULT_CONFIG);
   });
 
   it('shows a mock checkout summary', async () => {
@@ -73,5 +76,25 @@ describe('MockCheckoutPage', () => {
 
     expect(await screen.findByRole('heading', { name: /something went wrong/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /start over|home/i })).toHaveAttribute('href', '/');
+  });
+
+  it('renders today\'s exact card copy at the default config', async () => {
+    renderMockCheckout();
+    expect(screen.getByText('$5 CAD')).toBeInTheDocument();
+    expect(screen.getByText('Your first restyle preview, plus up to 5 more looks')).toBeInTheDocument();
+    expect(screen.getByText('7 days to explore styles and moods')).toBeInTheDocument();
+    expect(screen.getByText('A free 15-min chat with Marjorie')).toBeInTheDocument();
+    expect(screen.getByText('10% off Virtual Styling or Room Refresh')).toBeInTheDocument();
+  });
+
+  it('follows non-default pass settings', async () => {
+    (fetchAppConfig as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...DEFAULT_CONFIG, priceCents: 900, passRestyles: 3, passDays: 10, perkDiscountPct: 15,
+    });
+    renderMockCheckout();
+    expect(await screen.findByText('$9 CAD')).toBeInTheDocument();
+    expect(screen.getByText('Your first restyle preview, plus up to 3 more looks')).toBeInTheDocument();
+    expect(screen.getByText('10 days to explore styles and moods')).toBeInTheDocument();
+    expect(screen.getByText('15% off Virtual Styling or Room Refresh')).toBeInTheDocument();
   });
 });

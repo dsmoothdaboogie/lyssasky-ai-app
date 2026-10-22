@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FunnelLayout } from './FunnelLayout';
 import { Button } from '../components/Button';
 import { useFunnelState } from './useFunnelState';
-import { apiConfirmPaymentMock } from '../firebase/api';
+import { apiConfirmPaymentMock, fetchAppConfig } from '../firebase/api';
+import { DEFAULT_CONFIG } from '../config/defaultConfig';
+import { formatPrice } from '../domain/price';
+import type { AppConfig } from '../domain/types';
 
 const GENERIC_ERROR = "Something went wrong on our end — please try again in a moment.";
 
@@ -25,6 +28,17 @@ export function MockCheckoutPage() {
   const navigate = useNavigate();
   const [isConfirming, setIsConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Defaults first so the card never renders blank; admin settings replace
+  // them once loaded (best-effort — a failed fetch keeps the defaults).
+  const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAppConfig()
+      .then((c) => { if (!cancelled) setConfig(c); })
+      .catch(() => { /* keep defaults */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const lead = searchParams.get('lead');
   const session = searchParams.get('session');
@@ -74,12 +88,12 @@ export function MockCheckoutPage() {
 
         <div className="card" style={{ padding: 'var(--space-4)', marginTop: 'var(--space-4)' }}>
           <p style={{ fontWeight: 600, marginBottom: 'var(--space-2)' }}>Room Pass</p>
-          <p style={{ fontSize: '1.5rem', margin: 0 }}>$5 CAD</p>
+          <p style={{ fontSize: '1.5rem', margin: 0 }}>{formatPrice(config.priceCents)} {config.currency}</p>
           <ul className="text-muted" style={{ marginTop: 'var(--space-2)', paddingLeft: '1.2em' }}>
-            <li>Your first restyle preview, plus up to 5 more looks</li>
-            <li>7 days to explore styles and moods</li>
+            <li>Your first restyle preview, plus up to {config.passRestyles} more looks</li>
+            <li>{config.passDays} days to explore styles and moods</li>
             <li>A free 15-min chat with Marjorie</li>
-            <li>10% off Virtual Styling or Room Refresh</li>
+            <li>{config.perkDiscountPct}% off Virtual Styling or Room Refresh</li>
           </ul>
         </div>
 
