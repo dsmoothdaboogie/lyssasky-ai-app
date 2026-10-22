@@ -4,8 +4,10 @@ import { useSearchParams } from 'react-router-dom';
 import { FunnelLayout } from './FunnelLayout';
 import { Button } from '../components/Button';
 import { useFunnelState } from './useFunnelState';
-import { apiSubmitBooking, fetchAppConfig } from '../firebase/api';
+import { apiSubmitBooking, fetchAppConfig, fetchLead } from '../firebase/api';
 import { ensureAnonymousAuth } from '../firebase/client';
+import { BOOKING_INTERESTS, INTEREST_LABELS, isPerkValid } from '../domain/pass';
+import type { BookingInterest, LeadPerk } from '../domain/types';
 
 const GENERIC_ERROR = "Something went wrong on our end — please try again in a moment.";
 
@@ -30,6 +32,9 @@ export function BookingStep() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
+  const [interest, setInterest] = useState<BookingInterest>('chat');
+  const [perk, setPerk] = useState<LeadPerk | null>(null);
+
   const [calendlyUrl, setCalendlyUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -42,11 +47,18 @@ export function BookingStep() {
         // Calendly is a nice-to-have on this screen — the form submission
         // above it is the functional part, so don't block on this.
       }
+      if (leadId) {
+        try {
+          await ensureAnonymousAuth();
+          const lead = await fetchLead(leadId);
+          if (!cancelled && lead?.perk && isPerkValid(lead, Date.now())) setPerk(lead.perk);
+        } catch { /* perk display is a nice-to-have */ }
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [leadId]);
 
   const onNameChange = (e: ChangeEvent<HTMLInputElement>) => {
     setName(e.target.value);
@@ -75,6 +87,7 @@ export function BookingStep() {
       const trimmedNote = note.trim();
       await apiSubmitBooking(leadId, {
         name: trimmedName,
+        interest,
         ...(trimmedPhone ? { phone: trimmedPhone } : {}),
         ...(trimmedNote ? { note: trimmedNote } : {}),
       });
@@ -95,6 +108,12 @@ export function BookingStep() {
           is where your space actually comes together. No pressure at all — just a friendly
           chat about what you're picturing.
         </p>
+        {perk && (
+          <p className="card" style={{ padding: 'var(--space-3)' }}>
+            Your Room Pass perk: <strong>{perk.discountPct}% off</strong> Virtual Styling or Room Refresh with code{' '}
+            <strong>{perk.code}</strong>. Mention it when you book — Marjorie will apply it.
+          </p>
+        )}
 
         {submitted ? (
           <p role="status" style={{ marginTop: 'var(--space-4)' }}>
@@ -102,7 +121,19 @@ export function BookingStep() {
           </p>
         ) : (
           <form onSubmit={handleSubmit} noValidate>
-            <label htmlFor="booking-name">Name</label>
+            <label htmlFor="booking-interest">I'm interested in</label>
+            <select
+              id="booking-interest"
+              value={interest}
+              onChange={(e) => setInterest(e.target.value as BookingInterest)}
+              disabled={isSubmitting}
+            >
+              {BOOKING_INTERESTS.map((i) => (
+                <option key={i} value={i}>{INTEREST_LABELS[i]}</option>
+              ))}
+            </select>
+
+            <label htmlFor="booking-name" style={{ marginTop: 'var(--space-3)', display: 'block' }}>Name</label>
             <input
               id="booking-name"
               type="text"

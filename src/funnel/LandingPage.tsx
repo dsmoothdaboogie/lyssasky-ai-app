@@ -58,9 +58,9 @@ export function LandingPage() {
       <section>
         <h1>See your room, restyled</h1>
         <p>
-          Upload one photo of your space and get a personalized restyle preview for just{' '}
-          <strong>$5</strong>. It's a first look — a gentle "here's what's possible," not a
-          finished redesign. If you love the direction, Marjorie can take it further.
+          Upload one photo of your space and get a <strong>$5 Room Pass</strong>: see your room
+          in up to 6 looks over 7 days, plus a free chat with Marjorie and 10% off her services.
+          It's a first look — a gentle "here's what's possible," not a finished redesign.
         </p>
       </section>
 
@@ -87,7 +87,7 @@ export function LandingPage() {
       </section>
 
       <section>
-        <Button onClick={() => navigate('/upload')}>See your room, restyled — $5</Button>
+        <Button onClick={() => navigate('/upload')}>Get your Room Pass — $5</Button>
         <p className="text-muted" style={{ marginTop: 'var(--space-3)', fontSize: '0.9rem' }}>
           No pressure, no judgment — just a warm, honest look at what your room could feel like.
         </p>

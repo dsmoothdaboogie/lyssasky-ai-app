@@ -46,7 +46,7 @@ describe('LandingPage', () => {
   it('navigates to /upload when the CTA is clicked', async () => {
     const user = userEvent.setup();
     renderLanding();
-    await user.click(screen.getByRole('button', { name: /see your room, restyled — \$5/i }));
+    await user.click(screen.getByRole('button', { name: /get your room pass — \$5/i }));
     expect(screen.getByText('Upload screen')).toBeInTheDocument();
   });
 });

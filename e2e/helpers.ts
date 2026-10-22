@@ -18,7 +18,7 @@ export async function runFunnelToResult(page: Page): Promise<{ leadId: string; e
   // --- Landing ---
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'See your room, restyled' })).toBeVisible();
-  await page.getByRole('button', { name: 'See your room, restyled — $5' }).click();
+  await page.getByRole('button', { name: 'Get your Room Pass — $5' }).click();
 
   // --- Upload ---
   await expect(page).toHaveURL(/\/upload$/);
